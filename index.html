@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Pattern Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        .upload-section {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .drop-zone {
+            border: 3px dashed #3498db;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8fafc;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #2980b9;
+            background: #e8f4fc;
+        }
+        .drop-zone input {
+            display: none;
+        }
+        .config-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .config-item label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        .config-item select, .config-item input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .results-section {
+            display: none;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+        .chart-container.tall {
+            height: 400px;
+        }
+        .queue-section {
+            border-top: 3px solid #3498db;
+            margin-top: 30px;
+            padding-top: 20px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .summary-item .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+        }
+        .summary-item .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .outlier {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .tag {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 2px;
+        }
+        .tag.info {
+            background: #3498db;
+        }
+        .hidden {
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .intraday-table {
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        .intraday-table td, .intraday-table th {
+            padding: 4px 8px;
+            text-align: right;
+        }
+        .intraday-table th:first-child, .intraday-table td:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: white;
+        }
+        .copy-btn {
+            background: #27ae60;
+            font-size: 12px;
+            padding: 6px 12px;
+            margin-left: 10px;
+        }
+        .copy-btn:hover {
+            background: #219a52;
+        }
+        #excludeWeeks {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Call Pattern Analyzer</h1>
+    <p>Upload call detail records to extract weekly and intraday call patterns for workforce planning.</p>
+
+    <div class="upload-section">
+        <div class="drop-zone" id="dropZone">
+            <p><strong>Drop CSV or Excel file here</strong></p>
+            <p>or click to select</p>
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+        </div>
+    </div>
+
+    <div class="config-section hidden" id="configSection">
+        <h3>Column Mapping</h3>
+        <div class="config-grid">
+            <div class="config-item">
+                <label>Date/Time Column</label>
+                <select id="colDateTime"></select>
+            </div>
+            <div class="config-item">
+                <label>Time Column (optional, if separate)</label>
+                <select id="colTime"></select>
+            </div>
+            <div class="config-item">
+                <label>Queue/Skill Column (optional)</label>
+                <select id="colQueue"></select>
+            </div>
+        </div>
+        <div class="config-grid">
+            <div class="config-item">
+                <label>Weeks to Analyze</label>
+                <input type="number" id="weeksToAnalyze" value="13" min="1" max="52">
+            </div>
+        </div>
+        <button id="analyzeBtn" onclick="runAnalysis()">Analyze Patterns</button>
+    </div>
+
+    <div class="results-section" id="resultsSection">
+        <div class="card">
+            <h2>Data Overview</h2>
+            <div class="summary-grid" id="summaryGrid"></div>
+            <div id="queueSummaryTable"></div>
+        </div>
+
+        <div class="card">
+            <h2>Weekly Volume Analysis & Outlier Detection</h2>
+            <div id="weeklyStatsTable"></div>
+            <div class="chart-container tall" id="weeklyVolumeChartContainer">
+                <canvas id="weeklyVolumeChart"></canvas>
+            </div>
+            <div id="outlierInfo"></div>
+        </div>
+
+        <div class="card">
+            <h3>Outlier Exclusion</h3>
+            <p>Enter weeks to exclude (comma-separated, e.g., 2025-W52, 2026-W01):</p>
+            <input type="text" id="excludeWeeks" placeholder="2025-W52, 2026-W01">
+            <button onclick="recalculatePatterns()" style="margin-top:10px;">Recalculate Patterns</button>
+        </div>
+
+        <div id="patternResults"></div>
+    </div>
+
+    <div class="loading hidden" id="loading">
+        <div class="spinner"></div>
+        <p>Analyzing call patterns...</p>
+    </div>
+
+    <script>
+        // Global state
+        let rawData = [];
+        let processedData = [];
+        let columns = [];
+        let charts = {};
+
+        const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+        // File upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = e.target.result;
+                if (file.name.endsWith('.csv')) {
+                    parseCSV(data);
+                } else {
+                    parseExcel(data);
+                }
+            };
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function parseCSV(data) {
+            const lines = data.split(/\r?\n/).filter(line => line.trim());
+            if (lines.length < 2) return alert('File is empty or invalid');
+
+            // Detect delimiter
+            const delimiters = [',', ';', '\t'];
+            let delimiter = ',';
+            let maxCols = 0;
+            for (const d of delimiters) {
+                const cols = lines[0].split(d).length;
+                if (cols > maxCols) {
+                    maxCols = cols;
+                    delimiter = d;
+                }
+            }
+
+            columns = parseCSVLine(lines[0], delimiter);
+            rawData = lines.slice(1).map(line => {
+                const values = parseCSVLine(line, delimiter);
+                const row = {};
+                columns.forEach((col, i) => row[col] = values[i] || '');
+                return row;
+            }).filter(row => Object.values(row).some(v => v));
+
+            setupColumnMapping();
+        }
+
+        function parseCSVLine(line, delimiter) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === delimiter && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        function parseExcel(data) {
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd hh:mm:ss' });
+
+            if (jsonData.length < 2) return alert('File is empty or invalid');
+
+            columns = jsonData[0].map(c => String(c || '').trim());
+            rawData = jsonData.slice(1).map(row => {
+                const obj = {};
+                columns.forEach((col, i) => obj[col] = row[i] !== undefined ? row[i] : '');
+                return obj;
+            }).filter(row => Object.values(row).some(v => v !== ''));
+
+            setupColumnMapping();
+        }
+
+        function setupColumnMapping() {
+            const dateTimeSelect = document.getElementById('colDateTime');
+            const timeSelect = document.getElementById('colTime');
+            const queueSelect = document.getElementById('colQueue');
+
+            [dateTimeSelect, timeSelect, queueSelect].forEach(select => {
+                select.innerHTML = '<option value="">-- Select --</option>';
+                columns.forEach(col => {
+                    const option = document.createElement('option');
+                    option.value = col;
+                    option.textContent = col;
+                    select.appendChild(option);
+                });
+            });
+
+            // Auto-detect columns by analyzing names AND data
+            const dateTimeScores = {};
+            const timeOnlyScores = {};
+            const queueScores = {};
+
+            // Patterns with priority scores (higher = more specific)
+            // Keep name scores moderate - data analysis will add more weight
+            const dateNamePatterns = [
+                { pattern: 'datetime', score: 40 },
+                { pattern: 'timestamp', score: 40 },
+                { pattern: 'call_date', score: 25 },
+                { pattern: 'calldate', score: 25 },
+                { pattern: 'date', score: 20 },
+                { pattern: 'time', score: 30 },
+                { pattern: 'start', score: 25 },
+                { pattern: 'created', score: 20 },
+                { pattern: 'received', score: 25 }
+            ];
+            const queueNamePatterns = [
+                { pattern: 'queue_name', score: 80 },
+                { pattern: 'queuename', score: 80 },
+                { pattern: 'queue', score: 70 },
+                { pattern: 'skill', score: 65 },
+                { pattern: 'campaign', score: 50 },
+                { pattern: 'service', score: 40 },
+                { pattern: 'group', score: 30 },
+                { pattern: 'team', score: 25 },
+                { pattern: 'department', score: 20 },
+                { pattern: 'line', score: 15 }
+            ];
+
+            // Sample first 100 rows for data analysis
+            const sampleRows = rawData.slice(0, 100);
+
+            // Time-only patterns (for separate time column)
+            const timeOnlyPatterns = [
+                { pattern: 'time_from', score: 80 },
+                { pattern: 'start_time', score: 80 },
+                { pattern: 'call_time', score: 75 },
+                { pattern: 'time', score: 50 }
+            ];
+
+            columns.forEach(col => {
+                const lower = col.toLowerCase();
+                dateTimeScores[col] = 0;
+                timeOnlyScores[col] = 0;
+                queueScores[col] = 0;
+
+                // Score by column name (use highest matching pattern score)
+                for (const { pattern, score } of dateNamePatterns) {
+                    if (lower.includes(pattern)) {
+                        dateTimeScores[col] = Math.max(dateTimeScores[col], score);
+                    }
+                }
+                for (const { pattern, score } of timeOnlyPatterns) {
+                    if (lower.includes(pattern) && !lower.includes('datetime') && !lower.includes('timestamp')) {
+                        timeOnlyScores[col] = Math.max(timeOnlyScores[col], score);
+                    }
+                }
+                for (const { pattern, score } of queueNamePatterns) {
+                    if (lower.includes(pattern)) {
+                        queueScores[col] = Math.max(queueScores[col], score);
+                    }
+                }
+
+                // Analyze data values
+                const values = sampleRows.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
+                if (values.length === 0) return;
+
+                // Check if values look like dates/times
+                let hasDateComponent = 0;
+                let hasTimeComponent = 0;
+                let hasBoth = 0;
+                values.forEach(v => {
+                    let isDate = false;
+                    let isTime = false;
+                    if (v instanceof Date) {
+                        isDate = true;
+                        if (v.getHours() !== 0 || v.getMinutes() !== 0) isTime = true;
+                    } else {
+                        const str = String(v);
+                        // Check for date pattern (contains separators like - or / with numbers)
+                        if (/\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}/.test(str)) {
+                            isDate = true;
+                        }
+                        // Check for time pattern
+                        if (/\d{1,2}:\d{2}/.test(str)) {
+                            isTime = true;
+                        }
+                        // Fallback: try Date.parse for other formats
+                        if (!isDate && !isTime && !isNaN(Date.parse(str))) {
+                            const parsed = new Date(str);
+                            isDate = true;
+                            if (parsed.getHours() !== 0 || parsed.getMinutes() !== 0) isTime = true;
+                        }
+                    }
+                    if (isDate) hasDateComponent++;
+                    if (isTime) hasTimeComponent++;
+                    if (isDate && isTime) hasBoth++;
+                });
+
+                const datePct = hasDateComponent / values.length;
+                const timePct = hasTimeComponent / values.length;
+                const bothPct = hasBoth / values.length;
+
+                // Strongly prefer columns with BOTH date and time
+                if (bothPct > 0.8) {
+                    dateTimeScores[col] += 80; // Best: full datetime
+                } else if (datePct > 0.8 && timePct < 0.2) {
+                    dateTimeScores[col] += 40; // Date only - usable, may need separate time col
+                } else if (timePct > 0.8 && datePct < 0.2) {
+                    dateTimeScores[col] += 5; // Time only - not useful as primary
+                    timeOnlyScores[col] += 80; // But great as separate time column
+                }
+
+                // Check if values look like queue/category (string with limited unique values)
+                const uniqueValues = new Set(values.map(v => String(v)));
+                const uniqueRatio = uniqueValues.size / values.length;
+                const isNumeric = values.every(v => !isNaN(parseFloat(v)) && isFinite(v));
+
+                // Good queue column: categorical (low unique ratio), not numeric, not dates
+                if (!isNumeric && datePct < 0.2 && uniqueRatio < 0.3 && uniqueValues.size >= 1 && uniqueValues.size <= 50) {
+                    queueScores[col] += 40;
+                    // Bonus for reasonable number of categories
+                    if (uniqueValues.size >= 2 && uniqueValues.size <= 20) {
+                        queueScores[col] += 20;
+                    }
+                }
+            });
+
+            // Select highest scoring columns
+            const bestDateTime = Object.entries(dateTimeScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestTimeOnly = Object.entries(timeOnlyScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestQueue = Object.entries(queueScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+
+            if (bestDateTime) dateTimeSelect.value = bestDateTime[0];
+            // Only suggest separate time column if date column doesn't have time component
+            if (bestTimeOnly && bestDateTime && dateTimeScores[bestDateTime[0]] < 80) {
+                timeSelect.value = bestTimeOnly[0];
+            }
+            if (bestQueue) queueSelect.value = bestQueue[0];
+
+            document.getElementById('configSection').classList.remove('hidden');
+        }
+
+        function runAnalysis() {
+            const dateTimeCol = document.getElementById('colDateTime').value;
+            if (!dateTimeCol) return alert('Please select a Date/Time column');
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('resultsSection').style.display = 'none';
+
+            setTimeout(() => {
+                processData();
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('resultsSection').style.display = 'block';
+            }, 100);
+        }
+
+        function processData() {
+            const dateTimeCol = document.getElementById('colDateTime').value;
+            const timeCol = document.getElementById('colTime').value;
+            const queueCol = document.getElementById('colQueue').value;
+            const weeksToAnalyze = parseInt(document.getElementById('weeksToAnalyze').value) || 13;
+
+            // Process each row
+            processedData = rawData.map(row => {
+                const dateValue = row[dateTimeCol];
+                const parsed = parseDateTime(dateValue);
+                if (!parsed) return null;
+
+                // If separate time column specified, use it for the time component
+                let time = parsed.time;
+                if (timeCol && row[timeCol]) {
+                    const timeValue = row[timeCol];
+                    const parsedTime = parseTimeOnly(timeValue);
+                    if (parsedTime) time = parsedTime;
+                }
+
+                return {
+                    date: parsed.date,
+                    time: time,
+                    interval: getInterval(time),
+                    weekday: DAY_ORDER[parsed.date.getDay() === 0 ? 6 : parsed.date.getDay() - 1],
+                    yearWeek: getYearWeek(parsed.date),
+                    queue: queueCol ? (row[queueCol] || 'Unknown') : 'All Calls'
+                };
+            }).filter(r => r !== null);
+
+            // Filter to last N complete weeks
+            const allWeeks = [...new Set(processedData.map(r => r.yearWeek))].sort();
+            const currentWeek = getYearWeek(new Date());
+            const completeWeeks = allWeeks.filter(w => w < currentWeek).slice(-weeksToAnalyze);
+
+            processedData = processedData.filter(r => completeWeeks.includes(r.yearWeek));
+
+            // Render results
+            renderSummary();
+            renderWeeklyVolumes();
+            recalculatePatterns();
+        }
+
+        function parseDateTime(value) {
+            if (!value) return null;
+
+            let date;
+            if (value instanceof Date) {
+                date = value;
+            } else {
+                // Try various date formats
+                const str = String(value).trim();
+
+                // Handle DD-MM-YYYY HH:MM:SS or DD/MM/YYYY HH:MM:SS
+                const dmyMatch = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})\s*(\d{1,2})?:?(\d{2})?:?(\d{2})?/);
+                if (dmyMatch) {
+                    const [, d, m, y, h, min, s] = dmyMatch;
+                    date = new Date(y, m - 1, d, h || 0, min || 0, s || 0);
+                } else {
+                    // Try ISO format or other standard formats
+                    date = new Date(str);
+                }
+            }
+
+            if (isNaN(date.getTime())) return null;
+
+            return {
+                date: date,
+                time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+            };
+        }
+
+        function parseTimeOnly(value) {
+            if (!value) return null;
+            const str = String(value).trim();
+
+            // Match HH:MM or HH:MM:SS
+            const match = str.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+            if (match) {
+                const h = parseInt(match[1], 10);
+                const m = parseInt(match[2], 10);
+                if (h >= 0 && h < 24 && m >= 0 && m < 60) {
+                    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                }
+            }
+            return null;
+        }
+
+        function getInterval(time) {
+            const [h, m] = time.split(':').map(Number);
+            const intervalMin = Math.floor(m / 15) * 15;
+            return `${String(h).padStart(2, '0')}:${String(intervalMin).padStart(2, '0')}`;
+        }
+
+        function getYearWeek(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+        }
+
+        function renderSummary() {
+            const queues = [...new Set(processedData.map(r => r.queue))];
+            const weeks = [...new Set(processedData.map(r => r.yearWeek))];
+            const dates = processedData.map(r => r.date);
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+
+            document.getElementById('summaryGrid').innerHTML = `
+                <div class="summary-item">
+                    <div class="value">${processedData.length.toLocaleString()}</div>
+                    <div class="label">Total Calls</div>
+                </div>
+                <div class="summary-item">
+                    <div class="value">${weeks.length}</div>
+                    <div class="label">Weeks</div>
+                </div>
+                <div class="summary-item">
+                    <div class="value">${queues.length}</div>
+                    <div class="label">Queues</div>
+                </div>
+                <div class="summary-item">
+                    <div class="value">${minDate.toLocaleDateString()}</div>
+                    <div class="label">From</div>
+                </div>
+                <div class="summary-item">
+                    <div class="value">${maxDate.toLocaleDateString()}</div>
+                    <div class="label">To</div>
+                </div>
+            `;
+
+            // Queue summary table
+            const queueStats = queues.map(q => {
+                const qData = processedData.filter(r => r.queue === q);
+                return {
+                    queue: q,
+                    total: qData.length,
+                    perWeek: Math.round(qData.length / weeks.length)
+                };
+            }).sort((a, b) => b.total - a.total);
+
+            let tableHTML = `<table>
+                <tr><th>Queue</th><th>Total Calls</th><th>Calls/Week</th></tr>`;
+            queueStats.forEach(q => {
+                tableHTML += `<tr>
+                    <td>${q.queue}</td>
+                    <td>${q.total.toLocaleString()}</td>
+                    <td>${q.perWeek.toLocaleString()}</td>
+                </tr>`;
+            });
+            tableHTML += '</table>';
+            document.getElementById('queueSummaryTable').innerHTML = tableHTML;
+        }
+
+        function renderWeeklyVolumes() {
+            const weeks = [...new Set(processedData.map(r => r.yearWeek))].sort();
+            const queues = [...new Set(processedData.map(r => r.queue))];
+
+            // Calculate weekly volumes per queue
+            const weeklyVolumes = {};
+            queues.forEach(q => {
+                weeklyVolumes[q] = {};
+                weeks.forEach(w => {
+                    weeklyVolumes[q][w] = processedData.filter(r => r.queue === q && r.yearWeek === w).length;
+                });
+            });
+
+            // Calculate statistics and detect outliers
+            const stats = {};
+            const outlierWeeks = new Set();
+
+            queues.forEach(q => {
+                const values = Object.values(weeklyVolumes[q]);
+                const mean = values.reduce((a, b) => a + b, 0) / values.length;
+                const std = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
+                const cv = mean > 0 ? (std / mean * 100) : 0;
+
+                stats[q] = { mean, std, cv, min: Math.min(...values), max: Math.max(...values) };
+
+                // Detect outliers
+                weeks.forEach(w => {
+                    const v = weeklyVolumes[q][w];
+                    if (v < mean - 2 * std || v > mean + 2 * std) {
+                        outlierWeeks.add(w);
+                    }
+                });
+            });
+
+            // Stats table
+            let tableHTML = `<table>
+                <tr><th>Queue</th><th>Mean</th><th>Std Dev</th><th>CV</th><th>Min</th><th>Max</th></tr>`;
+            queues.forEach(q => {
+                const s = stats[q];
+                tableHTML += `<tr>
+                    <td>${q}</td>
+                    <td>${Math.round(s.mean).toLocaleString()}</td>
+                    <td>${Math.round(s.std).toLocaleString()}</td>
+                    <td>${s.cv.toFixed(1)}%</td>
+                    <td>${s.min.toLocaleString()}</td>
+                    <td>${s.max.toLocaleString()}</td>
+                </tr>`;
+            });
+            tableHTML += '</table>';
+            document.getElementById('weeklyStatsTable').innerHTML = tableHTML;
+
+            // Weekly volume chart (line chart per queue)
+            if (charts.weeklyVolume) charts.weeklyVolume.destroy();
+
+            const datasets = queues.map((q, i) => ({
+                label: q,
+                data: weeks.map(w => weeklyVolumes[q][w]),
+                borderColor: getColor(i, 1),
+                backgroundColor: getColor(i, 0.1),
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }));
+
+            charts.weeklyVolume = new Chart(document.getElementById('weeklyVolumeChart'), {
+                type: 'line',
+                data: { labels: weeks, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    },
+                    plugins: {
+                        title: { display: true, text: 'Weekly Call Volumes' }
+                    }
+                }
+            });
+
+            // Outlier info
+            const outlierArray = [...outlierWeeks].sort();
+            document.getElementById('outlierInfo').innerHTML = outlierArray.length > 0
+                ? `<p><strong>Potential outlier weeks (>2σ):</strong> ${outlierArray.map(w => `<span class="tag">${w}</span>`).join(' ')}</p>`
+                : '<p><span class="tag info">No significant outliers detected</span></p>';
+
+            // Pre-fill exclude weeks
+            document.getElementById('excludeWeeks').value = outlierArray.join(', ');
+        }
+
+        function recalculatePatterns() {
+            const excludeInput = document.getElementById('excludeWeeks').value;
+            const excludeWeeks = excludeInput.split(',').map(w => w.trim()).filter(w => w);
+
+            const patternData = processedData.filter(r => !excludeWeeks.includes(r.yearWeek));
+            const queues = [...new Set(patternData.map(r => r.queue))].sort((a, b) => {
+                return patternData.filter(r => r.queue === b).length - patternData.filter(r => r.queue === a).length;
+            });
+
+            let html = '';
+
+            queues.forEach((queue, qIdx) => {
+                const qData = patternData.filter(r => r.queue === queue);
+                if (qData.length === 0) return;
+
+                html += `<div class="card queue-section">
+                    <h2>${queue}</h2>
+                    <p><strong>Calls analyzed:</strong> ${qData.length.toLocaleString()} (excluding ${excludeWeeks.length} weeks)</p>`;
+
+                // Weekly pattern
+                const weeklyPattern = {};
+                DAY_ORDER.forEach(d => weeklyPattern[d] = 0);
+                qData.forEach(r => weeklyPattern[r.weekday]++);
+                const totalCalls = qData.length;
+                DAY_ORDER.forEach(d => weeklyPattern[d] = (weeklyPattern[d] / totalCalls * 100));
+
+                html += `<h3>Weekly Pattern <button class="copy-btn" onclick="copyTable('weekly-${qIdx}')">Copy</button></h3>
+                    <table id="weekly-${qIdx}">
+                        <tr>${DAY_ABBREV.map(d => `<th>${d}</th>`).join('')}</tr>
+                        <tr>${DAY_ORDER.map(d => `<td>${weeklyPattern[d].toFixed(1)}%</td>`).join('')}</tr>
+                    </table>
+                    <div class="chart-container">
+                        <canvas id="weekly-chart-${qIdx}"></canvas>
+                    </div>`;
+
+                // Intraday pattern
+                const intradayData = {};
+                const activeDays = new Set();
+                qData.forEach(r => {
+                    activeDays.add(r.weekday);
+                    const key = `${r.interval}-${r.weekday}`;
+                    intradayData[key] = (intradayData[key] || 0) + 1;
+                });
+
+                const activeDayOrder = DAY_ORDER.filter(d => activeDays.has(d));
+                const dayTotals = {};
+                activeDayOrder.forEach(d => {
+                    dayTotals[d] = qData.filter(r => r.weekday === d).length;
+                });
+
+                // Detect operating hours
+                const intervals = generateIntervals();
+                const { openInterval, closeInterval, activeIntervals } = detectOperatingHours(qData, intervals);
+
+                html += `<h3>Intraday Pattern <button class="copy-btn" onclick="copyTable('intraday-${qIdx}')">Copy</button></h3>
+                    <p><strong>Operating hours (detected):</strong> ${openInterval} - ${closeInterval}</p>`;
+
+                if (activeIntervals.length === 0) {
+                    html += `<p><em>No intraday data available</em></p></div>`;
+                } else {
+                    html += `<div class="intraday-table" style="overflow-x:auto;">
+                        <table id="intraday-${qIdx}">
+                            <tr><th>Interval</th>${activeDayOrder.map(d => `<th>${d.slice(0,3)}</th>`).join('')}</tr>`;
+
+                    activeIntervals.forEach(interval => {
+                        html += `<tr><td>${interval}</td>`;
+                        activeDayOrder.forEach(d => {
+                            const count = intradayData[`${interval}-${d}`] || 0;
+                            const pct = dayTotals[d] > 0 ? (count / dayTotals[d] * 100) : 0;
+                            html += `<td>${pct.toFixed(2)}%</td>`;
+                        });
+                        html += '</tr>';
+                    });
+
+                    html += `</table></div>
+                        <div class="chart-container tall">
+                            <canvas id="intraday-chart-${qIdx}"></canvas>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            document.getElementById('patternResults').innerHTML = html;
+
+            // Render charts after DOM update
+            setTimeout(() => {
+                queues.forEach((queue, qIdx) => {
+                    const qData = patternData.filter(r => r.queue === queue);
+                    if (qData.length === 0) return;
+
+                    // Weekly chart
+                    const weeklyPattern = {};
+                    DAY_ORDER.forEach(d => weeklyPattern[d] = 0);
+                    qData.forEach(r => weeklyPattern[r.weekday]++);
+                    const total = qData.length;
+
+                    const weeklyCanvas = document.getElementById(`weekly-chart-${qIdx}`);
+                    if (weeklyCanvas) {
+                        new Chart(weeklyCanvas, {
+                            type: 'bar',
+                            data: {
+                                labels: DAY_ABBREV,
+                                datasets: [{
+                                    label: '% of Weekly Calls',
+                                    data: DAY_ORDER.map(d => (weeklyPattern[d] / total * 100)),
+                                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                                    borderColor: 'rgba(52, 152, 219, 1)',
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true, title: { display: true, text: '% of Weekly Calls' } } }
+                            }
+                        });
+                    }
+
+                    // Intraday chart
+                    const activeDays = DAY_ORDER.filter(d => qData.some(r => r.weekday === d));
+                    const intervals = generateIntervals();
+                    const { activeIntervals } = detectOperatingHours(qData, intervals);
+
+                    const intradayData = {};
+                    qData.forEach(r => {
+                        const key = `${r.interval}-${r.weekday}`;
+                        intradayData[key] = (intradayData[key] || 0) + 1;
+                    });
+
+                    const dayTotals = {};
+                    activeDays.forEach(d => dayTotals[d] = qData.filter(r => r.weekday === d).length);
+
+                    const intradayCanvas = document.getElementById(`intraday-chart-${qIdx}`);
+                    if (intradayCanvas) {
+                        const datasets = activeDays.map((d, i) => ({
+                            label: d.slice(0, 3),
+                            data: activeIntervals.map(interval => {
+                                const count = intradayData[`${interval}-${d}`] || 0;
+                                return dayTotals[d] > 0 ? (count / dayTotals[d] * 100) : 0;
+                            }),
+                            borderColor: getColor(i, 1),
+                            backgroundColor: getColor(i, 0.1),
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1
+                        }));
+
+                        new Chart(intradayCanvas, {
+                            type: 'line',
+                            data: { labels: activeIntervals, datasets },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'top' } },
+                                scales: {
+                                    y: { beginAtZero: true, title: { display: true, text: '% of Daily Calls' } },
+                                    x: {
+                                        title: { display: true, text: 'Time of Day' },
+                                        ticks: { maxTicksLimit: 12 }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }, 50);
+        }
+
+        function generateIntervals() {
+            const intervals = [];
+            for (let h = 0; h < 24; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    intervals.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }
+            }
+            return intervals;
+        }
+
+        function detectOperatingHours(data, intervals) {
+            const intervalCounts = {};
+            intervals.forEach(i => intervalCounts[i] = 0);
+            data.forEach(r => {
+                if (r.interval && intervalCounts.hasOwnProperty(r.interval)) {
+                    intervalCounts[r.interval]++;
+                }
+            });
+
+            const total = data.length;
+            if (total === 0) {
+                return { openInterval: '08:00', closeInterval: '18:00', activeIntervals: intervals.slice(32, 72) };
+            }
+
+            // Find first and last intervals with calls (simple approach)
+            let openInterval = null;
+            let closeInterval = null;
+
+            for (const interval of intervals) {
+                if (intervalCounts[interval] > 0) {
+                    if (openInterval === null) openInterval = interval;
+                    closeInterval = interval;
+                }
+            }
+
+            // Fallback if no intervals found
+            if (!openInterval) openInterval = '08:00';
+            if (!closeInterval) closeInterval = '17:45';
+
+            // Convert close interval to actual closing time (+15 min)
+            const [h, m] = closeInterval.split(':').map(Number);
+            const closeHour = h + Math.floor((m + 15) / 60);
+            const closeMin = (m + 15) % 60;
+            const closeTime = `${String(closeHour).padStart(2, '0')}:${String(closeMin).padStart(2, '0')}`;
+
+            const openIdx = intervals.indexOf(openInterval);
+            const closeIdx = intervals.indexOf(closeInterval);
+            const activeIntervals = intervals.slice(openIdx, closeIdx + 1);
+
+            return { openInterval, closeInterval: closeTime, activeIntervals };
+        }
+
+        function getColor(index, alpha) {
+            const colors = [
+                `rgba(52, 152, 219, ${alpha})`,   // blue
+                `rgba(231, 76, 60, ${alpha})`,    // red
+                `rgba(46, 204, 113, ${alpha})`,   // green
+                `rgba(155, 89, 182, ${alpha})`,   // purple
+                `rgba(241, 196, 15, ${alpha})`,   // yellow
+                `rgba(230, 126, 34, ${alpha})`,   // orange
+                `rgba(26, 188, 156, ${alpha})`,   // teal
+                `rgba(236, 240, 241, ${alpha})`,  // light gray
+            ];
+            return colors[index % colors.length];
+        }
+
+        function copyTable(tableId) {
+            const table = document.getElementById(tableId);
+            const rows = table.querySelectorAll('tr');
+            let text = '';
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('th, td');
+                text += Array.from(cells).map(c => c.textContent).join('\t') + '\n';
+            });
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Table copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
