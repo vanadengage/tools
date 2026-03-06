@@ -19,7 +19,7 @@
             color: #333;
         }
         h1, h2, h3 {
-            color: #2c3e50;
+            color: #041E41;
         }
         .upload-section {
             background: white;
@@ -29,7 +29,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .drop-zone {
-            border: 3px dashed #3498db;
+            border: 3px dashed #041E41;
             border-radius: 8px;
             padding: 40px;
             text-align: center;
@@ -38,8 +38,8 @@
             background: #f8fafc;
         }
         .drop-zone:hover, .drop-zone.dragover {
-            border-color: #2980b9;
-            background: #e8f4fc;
+            border-color: #0a3060;
+            background: #e8edf4;
         }
         .drop-zone input {
             display: none;
@@ -71,7 +71,7 @@
             font-size: 14px;
         }
         button {
-            background: #3498db;
+            background: #041E41;
             color: white;
             border: none;
             padding: 12px 24px;
@@ -82,7 +82,7 @@
             transition: background 0.3s;
         }
         button:hover {
-            background: #2980b9;
+            background: #0a3060;
         }
         button:disabled {
             background: #bdc3c7;
@@ -126,7 +126,7 @@
             height: 400px;
         }
         .queue-section {
-            border-top: 3px solid #3498db;
+            border-top: 3px solid #041E41;
             margin-top: 30px;
             padding-top: 20px;
         }
@@ -145,7 +145,7 @@
         .summary-item .value {
             font-size: 24px;
             font-weight: bold;
-            color: #3498db;
+            color: #041E41;
         }
         .summary-item .label {
             font-size: 12px;
@@ -166,7 +166,7 @@
             margin: 2px;
         }
         .tag.info {
-            background: #3498db;
+            background: #041E41;
         }
         .hidden {
             display: none;
@@ -178,7 +178,7 @@
         }
         .spinner {
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
+            border-top: 4px solid #041E41;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -222,7 +222,10 @@
     </style>
 </head>
 <body>
-    <h1>Call Pattern Analyzer</h1>
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+        <img src="vanad-logo.svg" alt="Vanad Interactions" style="height: 32px;">
+        <h1 style="margin: 0;">Call Pattern Analyzer</h1>
+    </div>
     <p>Upload call detail records to extract weekly and intraday call patterns for workforce planning.</p>
 
     <div class="upload-section">
@@ -717,7 +720,7 @@
 
         // Helper: sum volumes for an array of records
         function sumVolume(records) {
-            return records.reduce((sum, r) => sum + (r.volume || 1), 0);
+            return records.reduce((sum, r) => sum + r.volume, 0);
         }
 
         function renderSummary() {
@@ -886,17 +889,19 @@
                     <h2>${queue}</h2>
                     <p><strong>Calls analyzed:</strong> ${qTotal.toLocaleString()} (excluding ${excludeWeeks.length} weeks)</p>`;
 
-                // Weekly pattern
+                // Weekly pattern — exclude days with negligible volume (<1%)
                 const weeklyPattern = {};
                 DAY_ORDER.forEach(d => weeklyPattern[d] = 0);
-                qData.forEach(r => weeklyPattern[r.weekday] += r.volume || 1);
+                qData.forEach(r => weeklyPattern[r.weekday] += r.volume);
                 const totalCalls = qTotal;
                 DAY_ORDER.forEach(d => weeklyPattern[d] = (weeklyPattern[d] / totalCalls * 100));
+                const activeWeekDays = DAY_ORDER.filter(d => weeklyPattern[d] >= 1.0);
+                const activeWeekAbbrev = activeWeekDays.map(d => DAY_ABBREV[DAY_ORDER.indexOf(d)]);
 
                 html += `<h3>Weekly Pattern <button class="copy-btn" onclick="copyTable('weekly-${qIdx}')">Copy</button></h3>
                     <table id="weekly-${qIdx}">
-                        <tr>${DAY_ABBREV.map(d => `<th>${d}</th>`).join('')}</tr>
-                        <tr>${DAY_ORDER.map(d => `<td>${weeklyPattern[d].toFixed(1)}%</td>`).join('')}</tr>
+                        <tr>${activeWeekAbbrev.map(d => `<th>${d}</th>`).join('')}</tr>
+                        <tr>${activeWeekDays.map(d => `<td>${weeklyPattern[d].toFixed(1)}%</td>`).join('')}</tr>
                     </table>
                     <div class="chart-container">
                         <canvas id="weekly-chart-${qIdx}"></canvas>
@@ -906,16 +911,15 @@
                 const intradayData = {};
                 qData.forEach(r => {
                     const key = `${r.interval}-${r.weekday}`;
-                    intradayData[key] = (intradayData[key] || 0) + (r.volume || 1);
+                    intradayData[key] = (intradayData[key] || 0) + (r.volume);
                 });
 
-                // Only include days that have actual calls (volume > 0)
+                // Only include days that passed the weekly volume threshold
                 const dayTotals = {};
-                DAY_ORDER.forEach(d => {
-                    const total = sumVolume(qData.filter(r => r.weekday === d));
-                    if (total > 0) dayTotals[d] = total;
+                activeWeekDays.forEach(d => {
+                    dayTotals[d] = sumVolume(qData.filter(r => r.weekday === d));
                 });
-                const activeDayOrder = DAY_ORDER.filter(d => d in dayTotals);
+                const activeDayOrder = activeWeekDays;
 
                 // Detect operating hours
                 const intervals = generateIntervals();
@@ -958,23 +962,25 @@
                     const qTotal = sumVolume(qData);
                     if (qTotal === 0) return;
 
-                    // Weekly chart
+                    // Weekly chart — exclude days with negligible volume (<1%)
                     const weeklyPattern = {};
                     DAY_ORDER.forEach(d => weeklyPattern[d] = 0);
-                    qData.forEach(r => weeklyPattern[r.weekday] += r.volume || 1);
+                    qData.forEach(r => weeklyPattern[r.weekday] += r.volume);
                     const total = qTotal;
+                    const chartWeekDays = DAY_ORDER.filter(d => (weeklyPattern[d] / total * 100) >= 1.0);
+                    const chartWeekAbbrev = chartWeekDays.map(d => DAY_ABBREV[DAY_ORDER.indexOf(d)]);
 
                     const weeklyCanvas = document.getElementById(`weekly-chart-${qIdx}`);
                     if (weeklyCanvas) {
                         new Chart(weeklyCanvas, {
                             type: 'bar',
                             data: {
-                                labels: DAY_ABBREV,
+                                labels: chartWeekAbbrev,
                                 datasets: [{
                                     label: '% of Weekly Calls',
-                                    data: DAY_ORDER.map(d => (weeklyPattern[d] / total * 100)),
-                                    backgroundColor: 'rgba(52, 152, 219, 0.7)',
-                                    borderColor: 'rgba(52, 152, 219, 1)',
+                                    data: chartWeekDays.map(d => (weeklyPattern[d] / total * 100)),
+                                    backgroundColor: 'rgba(31, 119, 180, 0.7)',
+                                    borderColor: 'rgba(31, 119, 180, 1)',
                                     borderWidth: 1
                                 }]
                             },
@@ -994,16 +1000,15 @@
                     const intradayData = {};
                     qData.forEach(r => {
                         const key = `${r.interval}-${r.weekday}`;
-                        intradayData[key] = (intradayData[key] || 0) + (r.volume || 1);
+                        intradayData[key] = (intradayData[key] || 0) + (r.volume);
                     });
 
-                    // Only include days with actual calls
+                    // Only include days that passed the weekly volume threshold
                     const dayTotals = {};
-                    DAY_ORDER.forEach(d => {
-                        const total = sumVolume(qData.filter(r => r.weekday === d));
-                        if (total > 0) dayTotals[d] = total;
+                    chartWeekDays.forEach(d => {
+                        dayTotals[d] = sumVolume(qData.filter(r => r.weekday === d));
                     });
-                    const activeDays = DAY_ORDER.filter(d => d in dayTotals);
+                    const activeDays = chartWeekDays;
 
                     const intradayCanvas = document.getElementById(`intraday-chart-${qIdx}`);
                     if (intradayCanvas) {
@@ -1056,7 +1061,7 @@
             intervals.forEach(i => intervalCounts[i] = 0);
             data.forEach(r => {
                 if (r.interval && intervalCounts.hasOwnProperty(r.interval)) {
-                    intervalCounts[r.interval] += r.volume || 1;
+                    intervalCounts[r.interval] += r.volume;
                 }
             });
 
@@ -1065,12 +1070,14 @@
                 return { openInterval: '08:00', closeInterval: '18:00', activeIntervals: intervals.slice(32, 72) };
             }
 
-            // Find first and last intervals with calls (simple approach)
+            // Use threshold: interval must have >= 0.5% of total volume to count
+            const threshold = total * 0.005;
+
             let openInterval = null;
             let closeInterval = null;
 
             for (const interval of intervals) {
-                if (intervalCounts[interval] > 0) {
+                if (intervalCounts[interval] >= threshold) {
                     if (openInterval === null) openInterval = interval;
                     closeInterval = interval;
                 }
@@ -1094,15 +1101,18 @@
         }
 
         function getColor(index, alpha) {
+            // Tableau 10 — optimized for categorical data visualization
             const colors = [
-                `rgba(52, 152, 219, ${alpha})`,   // blue
-                `rgba(231, 76, 60, ${alpha})`,    // red
-                `rgba(46, 204, 113, ${alpha})`,   // green
-                `rgba(155, 89, 182, ${alpha})`,   // purple
-                `rgba(241, 196, 15, ${alpha})`,   // yellow
-                `rgba(230, 126, 34, ${alpha})`,   // orange
-                `rgba(26, 188, 156, ${alpha})`,   // teal
-                `rgba(236, 240, 241, ${alpha})`,  // light gray
+                `rgba(31, 119, 180, ${alpha})`,   // blue
+                `rgba(255, 127, 14, ${alpha})`,   // orange
+                `rgba(44, 160, 44, ${alpha})`,    // green
+                `rgba(214, 39, 40, ${alpha})`,    // red
+                `rgba(148, 103, 189, ${alpha})`,  // purple
+                `rgba(140, 86, 75, ${alpha})`,    // brown
+                `rgba(227, 119, 194, ${alpha})`,  // pink
+                `rgba(127, 127, 127, ${alpha})`,  // gray
+                `rgba(188, 189, 34, ${alpha})`,   // olive
+                `rgba(23, 190, 207, ${alpha})`,   // cyan
             ];
             return colors[index % colors.length];
         }

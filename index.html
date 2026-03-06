@@ -4,6 +4,145 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vanad Interactions Tools</title>
-<body><p>Tools that mostly run in the browser</p>
-<p></p></body>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #041E41;
+            color: white;
+            padding: 48px 24px;
+            text-align: center;
+        }
+
+        header img {
+            height: 40px;
+            margin-bottom: 16px;
+            filter: brightness(0) invert(1);
+        }
+
+        header p {
+            font-size: 1.05rem;
+            opacity: 0.75;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .tools-grid {
+            max-width: 960px;
+            margin: 40px auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .tool-card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px 28px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+            display: flex;
+            flex-direction: column;
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .tool-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .tool-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 16px;
+            background: #e8edf4;
+            color: #041E41;
+        }
+
+        .tool-card h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #041E41;
+            margin-bottom: 8px;
+        }
+
+        .tool-card p {
+            font-size: 0.925rem;
+            color: #5a6a7a;
+            line-height: 1.55;
+            flex: 1;
+            margin-bottom: 20px;
+        }
+
+        .tool-card a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 20px;
+            background: #041E41;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            align-self: flex-start;
+        }
+
+        .tool-card a:hover {
+            background: #0a3060;
+        }
+
+        .tool-card a .arrow {
+            font-size: 1.1rem;
+            transition: transform 0.15s ease;
+        }
+
+        .tool-card a:hover .arrow {
+            transform: translateX(2px);
+        }
+
+        footer {
+            text-align: center;
+            padding: 32px 24px;
+            color: #8a95a5;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="vanad-logo.svg" alt="Vanad Interactions">
+        <p>Browser-based tools for workforce management and contact center operations.</p>
+    </header>
+
+    <div class="tools-grid">
+        <div class="tool-card">
+            <div class="tool-icon">&#9742;</div>
+            <h2>Call Pattern Analyzer</h2>
+            <p>Analyze call center data to extract weekly and intraday distribution patterns. Upload CSV or Excel files to visualize call volumes and generate arrival patterns for workforce planning.</p>
+            <a href="call_pattern_analyzer.html" target="_blank">Open tool <span class="arrow">&rarr;</span></a>
+        </div>
+    </div>
+
+    <footer>Vanad Interactions</footer>
+</body>
 </html>
