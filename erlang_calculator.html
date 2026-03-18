@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erlang C Calculator</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #041E41;
+        }
+        .upload-section {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .drop-zone {
+            border: 3px dashed #041E41;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8fafc;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #0a3060;
+            background: #e8edf4;
+        }
+        .drop-zone input {
+            display: none;
+        }
+        .config-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .config-item label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        .config-item select, .config-item input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #041E41;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #0a3060;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .results-section {
+            display: none;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .summary-item .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #041E41;
+        }
+        .summary-item .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .copy-btn {
+            background: #27ae60;
+            font-size: 12px;
+            padding: 6px 12px;
+            margin-left: 10px;
+        }
+        .copy-btn:hover {
+            background: #219a52;
+        }
+        .hidden {
+            display: none;
+        }
+        .status-msg {
+            font-size: 14px;
+            margin-left: 15px;
+        }
+        .status-msg.error { color: #e74c3c; }
+        .status-msg.success { color: #27ae60; }
+
+        /* Pattern input */
+        .input-mode-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .input-mode-toggle button {
+            padding: 8px 16px;
+            font-size: 13px;
+            background: #f8f9fa;
+            color: #555;
+            border: 1px solid #ddd;
+        }
+        .input-mode-toggle button.active {
+            background: #041E41;
+            color: white;
+            border-color: #041E41;
+        }
+        .input-mode-content {
+            display: none;
+        }
+        .input-mode-content.active {
+            display: block;
+        }
+        .paste-area-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) {
+            .paste-area-container { grid-template-columns: 1fr; }
+        }
+        .paste-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        .paste-group .hint {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 8px;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+
+        /* Results tables */
+        .results-table {
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        .results-table td, .results-table th {
+            padding: 4px 8px;
+            text-align: right;
+        }
+        .results-table th:first-child, .results-table td:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: white;
+        }
+        .results-table th:first-child {
+            background: #f8f9fa;
+        }
+        .day-totals-row td {
+            font-weight: 700;
+            border-top: 2px solid #041E41;
+            background: #f8f9fa !important;
+        }
+        .day-totals-row td:first-child {
+            background: #f8f9fa !important;
+        }
+
+        /* Heat map */
+        .cell-heat-1 { background: #e8f5e9; }
+        .cell-heat-2 { background: #fff9c4; }
+        .cell-heat-3 { background: #ffe0b2; }
+        .cell-heat-4 { background: #ffccbc; }
+        .cell-heat-5 { background: #ef9a9a; }
+
+        /* Occupancy colors */
+        .occ-good { color: #27ae60; font-weight: 600; }
+        .occ-warn { color: #f39c12; font-weight: 600; }
+        .occ-high { color: #e74c3c; font-weight: 600; }
+
+        /* Tab bar */
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 15px;
+        }
+        .tab-bar button {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #999;
+        }
+        .tab-bar button.active {
+            color: #041E41;
+            border-bottom-color: #041E41;
+        }
+        .tab-bar button:hover {
+            color: #041E41;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+        <img src="vanad-logo.svg" alt="Vanad Interactions" style="height: 32px;">
+        <h1 style="margin: 0;">Erlang C Calculator</h1>
+    </div>
+    <p>Upload a call pattern, enter volume and AHT forecasts, and calculate staffing requirements per interval.</p>
+
+    <!-- Pattern Input -->
+    <div class="upload-section">
+        <h3>1. Call Pattern</h3>
+        <div class="input-mode-toggle">
+            <button class="active" onclick="setInputMode('paste', this)">Paste from clipboard</button>
+            <button onclick="setInputMode('upload', this)">Upload file</button>
+        </div>
+
+        <div id="mode-paste" class="input-mode-content active">
+            <div class="paste-area-container">
+                <div class="paste-group">
+                    <label>Weekly Distribution</label>
+                    <p class="hint">Paste the weekly pattern table (days as columns, percentages as values)</p>
+                    <textarea id="weeklyPaste" rows="4" placeholder="Mon    Tue    Wed    Thu    Fri&#10;20.5%  20.1%  19.8%  20.3%  19.3%"></textarea>
+                </div>
+                <div class="paste-group">
+                    <label>Intraday Distribution</label>
+                    <p class="hint">Paste the intraday pattern table (intervals as rows, days as columns, % of daily volume)</p>
+                    <textarea id="intradayPaste" rows="12" placeholder="Interval  Mon    Tue    Wed    Thu    Fri&#10;08:00     2.34%  2.45%  2.38%  2.41%  2.29%&#10;08:15     3.12%  3.08%  3.15%  3.10%  3.05%&#10;..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div id="mode-upload" class="input-mode-content">
+            <div class="drop-zone" id="dropZone">
+                <p><strong>Drop pattern file here</strong></p>
+                <p>or click to select (CSV, TSV, or Excel)</p>
+                <p style="font-size: 12px; color: #999; margin-top: 8px;">
+                    Expected: First row = header with day names. First column = time intervals. Values = % of weekly volume.
+                </p>
+                <input type="file" id="fileInput" accept=".csv,.tsv,.xlsx,.xls,.txt">
+            </div>
+        </div>
+    </div>
+
+    <!-- Forecast Parameters -->
+    <div class="config-section">
+        <h3>2. Forecast Parameters</h3>
+        <div class="config-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="config-item">
+                <label>Weekly Call Volume</label>
+                <input type="text" id="weeklyVolume" placeholder="e.g. 5000" inputmode="numeric">
+            </div>
+            <div class="config-item">
+                <label>Average Handle Time (sec)</label>
+                <input type="text" id="aht" placeholder="e.g. 240" inputmode="numeric">
+            </div>
+            <div class="config-item">
+                <label>Interval Length</label>
+                <select id="intervalLength">
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="60">60 minutes</option>
+                </select>
+            </div>
+            <div class="config-item">
+                <label>Service Level Target (%)</label>
+                <input type="number" id="slTarget" value="80" min="1" max="100">
+            </div>
+            <div class="config-item">
+                <label>Target Answer Time (sec)</label>
+                <input type="number" id="slTime" value="20" min="1">
+            </div>
+            <div class="config-item">
+                <label>Max Occupancy (%)</label>
+                <input type="number" id="maxOcc" value="85" min="1" max="100">
+            </div>
+            <div class="config-item">
+                <label>Shrinkage (%)</label>
+                <input type="number" id="shrinkage" value="0" min="0" max="100">
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <button id="calculateBtn" onclick="calculate()">Calculate</button>
+            <label style="font-size: 14px; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="fractionalAgents" style="width: auto;"> Fractional agents
+            </label>
+            <span class="status-msg" id="statusMsg"></span>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div class="results-section" id="results">
+        <div class="card">
+            <h3>Summary</h3>
+            <div class="summary-grid" id="summaryGrid"></div>
+        </div>
+
+        <div class="card">
+            <h3 style="display: inline;">Staffing Table</h3>
+            <div class="tab-bar" id="tabBar" style="margin-top: 10px;"></div>
+            <div id="tabContents"></div>
+        </div>
+    </div>
+
+    <script>
+    // ── Locale number formatting ──
+    function fmtNum(v, decimals) {
+        return v.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+    function fmtInt(v) {
+        return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    }
+    function fmtPct(v, decimals) {
+        return fmtNum(v, decimals !== undefined ? decimals : 1) + '%';
+    }
+
+    // ── Input mode toggle ──
+    function setInputMode(mode, btn) {
+        document.querySelectorAll('.input-mode-toggle button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.input-mode-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('mode-' + mode).classList.add('active');
+    }
+
+    // ── File upload ──
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+    let uploadedPattern = null;
+
+    function handleFile(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (['xlsx', 'xls'].includes(ext)) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const wb = XLSX.read(e.target.result, { type: 'array' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_csv(ws, { FS: '\t' });
+                uploadedPattern = data;
+                setStatus('File loaded: ' + file.name, 'success');
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            const reader = new FileReader();
+            reader.onload = e => {
+                uploadedPattern = e.target.result;
+                setStatus('File loaded: ' + file.name, 'success');
+            };
+            reader.readAsText(file);
+        }
+    }
+
+    function setStatus(msg, type) {
+        const el = document.getElementById('statusMsg');
+        el.textContent = msg;
+        el.className = 'status-msg' + (type ? ' ' + type : '');
+    }
+
+    // ── Erlang C Math ──
+    function erlangC(N, A) {
+        if (A === 0) return 0;
+        if (N <= A) return 1.0;
+
+        let powers = [1];
+        for (let k = 1; k <= N; k++) {
+            powers.push(powers[k - 1] * A / k);
+        }
+
+        let sumPart = 0;
+        for (let k = 0; k < N; k++) {
+            sumPart += powers[k];
+        }
+
+        let lastTerm = powers[N] * N / (N - A);
+        return lastTerm / (sumPart + lastTerm);
+    }
+
+    function serviceLevel(N, A, targetTimeSec, ahtSec) {
+        if (A === 0) return 1;
+        if (N <= A) return 0;
+        let Pw = erlangC(N, A);
+        return 1 - Pw * Math.exp(-(N - A) * (targetTimeSec / ahtSec));
+    }
+
+    function requiredAgents(calls, ahtSec, intervalSec, slTargetFrac, slTimeSec, maxOccFrac) {
+        if (calls === 0) return 0;
+        let A = (calls * ahtSec) / intervalSec;
+        if (A === 0) return 0;
+
+        // Find the first integer N where service level >= target
+        let N = Math.max(1, Math.ceil(A));
+        while (N < A + 200) {
+            let sl = serviceLevel(N, A, slTimeSec, ahtSec);
+            if (sl >= slTargetFrac) break;
+            N++;
+        }
+
+        // Interpolate between N-1 and N to find fractional agents
+        // that would achieve exactly the target service level
+        let slAtN = serviceLevel(N, A, slTimeSec, ahtSec);
+        let slAtNm1 = (N > 1 && N - 1 > A) ? serviceLevel(N - 1, A, slTimeSec, ahtSec) : 0;
+
+        let fractional;
+        if (slAtN === slAtNm1) {
+            fractional = N;
+        } else {
+            fractional = (N - 1) + (slTargetFrac - slAtNm1) / (slAtN - slAtNm1);
+        }
+
+        // Also enforce max occupancy: need at least A / maxOccFrac agents
+        let minForOcc = A / maxOccFrac;
+        fractional = Math.max(fractional, minForOcc);
+
+        return fractional;
+    }
+
+    // ── Pattern Parsing ──
+    function parseTSV(text) {
+        let lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+        if (!lines.length) return [];
+
+        let delim = '\t';
+        if (lines[0].includes('\t')) delim = '\t';
+        else if (lines[0].includes(';')) delim = ';';
+        else if (lines[0].includes(',')) delim = ',';
+
+        return lines.map(l => l.split(delim).map(c => c.trim()));
+    }
+
+    function parseLocalNumber(s) {
+        if (!s) return NaN;
+        s = s.trim();
+        // Remove any whitespace/non-breaking space thousand separators
+        s = s.replace(/[\s\u00A0]/g, '');
+        // Determine decimal separator heuristic:
+        // If both , and . appear, the LAST one is the decimal separator
+        let lastComma = s.lastIndexOf(',');
+        let lastDot = s.lastIndexOf('.');
+        if (lastComma > -1 && lastDot > -1) {
+            if (lastComma > lastDot) {
+                // e.g. 1.234,56 → European
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else {
+                // e.g. 1,234.56 → English
+                s = s.replace(/,/g, '');
+            }
+        } else if (lastComma > -1) {
+            // Only commas: could be "1,5" (decimal) or "1,000" (thousands)
+            // If exactly 3 digits after comma → treat as thousands; otherwise decimal
+            let afterComma = s.substring(lastComma + 1);
+            if (/^\d{3}$/.test(afterComma) && s.indexOf(',') === lastComma) {
+                s = s.replace(',', ''); // thousands
+            } else {
+                s = s.replace(/,/g, '.'); // decimal(s)
+            }
+        }
+        // dots only: standard parseFloat handles it
+        let v = parseFloat(s);
+        return v;
+    }
+
+    function parsePercent(s) {
+        if (!s) return 0;
+        s = s.replace('%', '').trim();
+        let v = parseLocalNumber(s);
+        if (isNaN(v)) return 0;
+        return v / 100;
+    }
+
+    const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    function matchDay(s) {
+        s = s.toLowerCase().trim();
+        for (let i = 0; i < DAY_NAMES.length; i++) {
+            if (s === DAY_NAMES[i].toLowerCase() || s === DAY_FULL[i].toLowerCase() ||
+                s.startsWith(DAY_NAMES[i].toLowerCase())) return DAY_NAMES[i];
+        }
+        return null;
+    }
+
+    function parseWeeklyPattern(text) {
+        let rows = parseTSV(text);
+        if (rows.length < 2) throw new Error('Weekly pattern needs at least a header row and a data row');
+
+        let header = rows[0];
+        let data = rows[1];
+
+        let pattern = {};
+        for (let i = 0; i < header.length; i++) {
+            let day = matchDay(header[i]);
+            if (day && i < data.length) {
+                pattern[day] = parsePercent(data[i]);
+            }
+        }
+
+        if (Object.keys(pattern).length === 0) throw new Error('Could not find day names in weekly pattern header');
+        return pattern;
+    }
+
+    function parseIntradayPattern(text) {
+        let rows = parseTSV(text);
+        if (rows.length < 2) throw new Error('Intraday pattern needs at least a header and one data row');
+
+        let header = rows[0];
+
+        let dayColumns = {};
+        for (let i = 0; i < header.length; i++) {
+            let day = matchDay(header[i]);
+            if (day) dayColumns[day] = i;
+        }
+
+        if (Object.keys(dayColumns).length === 0) throw new Error('Could not find day names in intraday pattern header');
+
+        let intervalCol = 0;
+        for (let i = 0; i < header.length; i++) {
+            if (header[i].match(/interval|time|tijd/i) || header[i].match(/^\d{1,2}:\d{2}/)) {
+                intervalCol = i;
+                break;
+            }
+        }
+
+        let pattern = {};
+        let intervals = [];
+
+        for (let r = 1; r < rows.length; r++) {
+            let row = rows[r];
+            let interval = row[intervalCol];
+            if (!interval || !interval.match(/\d{1,2}:\d{2}/)) continue;
+            interval = interval.replace(/^(\d):/, '0$1:');
+            intervals.push(interval);
+
+            for (let [day, col] of Object.entries(dayColumns)) {
+                if (!pattern[day]) pattern[day] = {};
+                pattern[day][interval] = parsePercent(row[col]);
+            }
+        }
+
+        return { pattern, intervals: [...new Set(intervals)] };
+    }
+
+    function parseCombinedPattern(text) {
+        let rows = parseTSV(text);
+        if (rows.length < 2) throw new Error('Pattern file needs at least a header and data');
+
+        let header = rows[0];
+        let dayColumns = {};
+        for (let i = 0; i < header.length; i++) {
+            let day = matchDay(header[i]);
+            if (day) dayColumns[day] = i;
+        }
+
+        if (Object.keys(dayColumns).length === 0) throw new Error('Could not find day columns in file');
+
+        let intervalCol = 0;
+        let intervals = [];
+        let pattern = {};
+
+        for (let r = 1; r < rows.length; r++) {
+            let row = rows[r];
+            let interval = row[intervalCol];
+            if (!interval || !interval.match(/\d{1,2}:\d{2}/)) continue;
+            interval = interval.replace(/^(\d):/, '0$1:');
+            intervals.push(interval);
+
+            for (let [day, col] of Object.entries(dayColumns)) {
+                if (!pattern[day]) pattern[day] = {};
+                pattern[day][interval] = parsePercent(row[col]);
+            }
+        }
+
+        return { days: Object.keys(dayColumns), intervals, pattern, isCombined: true };
+    }
+
+    // ── Main Calculation ──
+    function calculate() {
+        try {
+            setStatus('');
+            let weeklyVolume = Math.round(parseLocalNumber(document.getElementById('weeklyVolume').value));
+            let ahtSec = parseLocalNumber(document.getElementById('aht').value);
+            let intervalMin = parseInt(document.getElementById('intervalLength').value);
+            let slTarget = parseInt(document.getElementById('slTarget').value) / 100;
+            let slTime = parseInt(document.getElementById('slTime').value);
+            let maxOcc = parseInt(document.getElementById('maxOcc').value) / 100;
+            let shrinkage = parseInt(document.getElementById('shrinkage').value) / 100;
+            let fractional = document.getElementById('fractionalAgents').checked;
+
+            if (!weeklyVolume || weeklyVolume <= 0) throw new Error('Enter a valid weekly call volume');
+            if (!ahtSec || ahtSec <= 0) throw new Error('Enter a valid AHT');
+
+            let intervalSec = intervalMin * 60;
+            let days, intervals, getCallsForInterval;
+
+            let isPasteMode = document.getElementById('mode-paste').classList.contains('active');
+
+            if (isPasteMode) {
+                let weeklyText = document.getElementById('weeklyPaste').value.trim();
+                let intradayText = document.getElementById('intradayPaste').value.trim();
+                if (!weeklyText || !intradayText) throw new Error('Paste both weekly and intraday patterns');
+
+                let weekly = parseWeeklyPattern(weeklyText);
+                let intraday = parseIntradayPattern(intradayText);
+
+                days = Object.keys(weekly).sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b));
+                intervals = intraday.intervals;
+
+                getCallsForInterval = (day, interval) => {
+                    let dailyFrac = weekly[day] || 0;
+                    let intervalFrac = (intraday.pattern[day] && intraday.pattern[day][interval]) || 0;
+                    return weeklyVolume * dailyFrac * intervalFrac;
+                };
+            } else {
+                if (!uploadedPattern) throw new Error('Upload a pattern file first');
+                let combined = parseCombinedPattern(uploadedPattern);
+                days = combined.days.sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b));
+                intervals = combined.intervals;
+
+                getCallsForInterval = (day, interval) => {
+                    let frac = (combined.pattern[day] && combined.pattern[day][interval]) || 0;
+                    return weeklyVolume * frac;
+                };
+            }
+
+            if (!days.length) throw new Error('No valid days found in pattern');
+            if (!intervals.length) throw new Error('No valid intervals found in pattern');
+
+            let results = {};
+            let totalCalls = 0;
+            let totalTrafficHours = 0;
+            let totalAgentHours = 0;
+
+            for (let day of days) {
+                results[day] = {};
+                for (let interval of intervals) {
+                    let calls = getCallsForInterval(day, interval);
+                    let A = (calls * ahtSec) / intervalSec;
+                    let agents = requiredAgents(calls, ahtSec, intervalSec, slTarget, slTime, maxOcc);
+                    if (!fractional) agents = Math.ceil(agents);
+                    let agentsWithShrinkage = shrinkage > 0 ? agents / (1 - shrinkage) : agents;
+                    if (!fractional) agentsWithShrinkage = Math.ceil(agentsWithShrinkage);
+                    let occ = agents > 0 ? A / agents : 0;
+
+                    results[day][interval] = {
+                        calls: calls,
+                        agents: agents,
+                        agentsWithShrinkage: agentsWithShrinkage,
+                        erlang: A,
+                        occupancy: occ
+                    };
+
+                    totalCalls += calls;
+                    totalTrafficHours += A * (intervalMin / 60);
+                    totalAgentHours += agentsWithShrinkage * (intervalMin / 60);
+                }
+            }
+
+            let totalAHTHours = (weeklyVolume * ahtSec) / 3600;
+            let overallOccupancy = totalAgentHours > 0 ? totalTrafficHours / totalAgentHours : 0;
+
+            displayResults(days, intervals, results, {
+                weeklyVolume, ahtSec, intervalMin, totalAHTHours,
+                totalAgentHours, totalTrafficHours, overallOccupancy, shrinkage, fractional
+            });
+
+        } catch (e) {
+            setStatus(e.message, 'error');
+        }
+    }
+
+    // ── Display Results ──
+    function displayResults(days, intervals, results, summary) {
+        let resultsDiv = document.getElementById('results');
+        resultsDiv.style.display = 'block';
+
+        let occClass = summary.overallOccupancy > 0.85 ? 'occ-high' : summary.overallOccupancy > 0.75 ? 'occ-warn' : 'occ-good';
+
+        document.getElementById('summaryGrid').innerHTML = `
+            <div class="summary-item">
+                <div class="value">${fmtInt(summary.weeklyVolume)}</div>
+                <div class="label">Weekly Volume</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">${fmtNum(summary.totalAHTHours, 1)}h</div>
+                <div class="label">Total AHT (${fmtNum(summary.totalAHTHours / 40, 2)} FTE)</div>
+            </div>
+            <div class="summary-item">
+                <div class="value">${fmtNum(summary.totalAgentHours, 1)}h</div>
+                <div class="label">Required Hours (${fmtNum(summary.totalAgentHours / 40, 2)} FTE)${summary.shrinkage > 0 ? '<br>incl. ' + Math.round(summary.shrinkage * 100) + '% shrinkage' : ''}</div>
+            </div>
+            <div class="summary-item">
+                <div class="value ${occClass}">${fmtPct(summary.overallOccupancy * 100, 1)}</div>
+                <div class="label">Overall Occupancy</div>
+            </div>
+        `;
+
+        // Tabs
+        let tabs = [{ id: 'agents', label: 'Agents Required' }];
+        if (summary.shrinkage > 0) {
+            tabs.push({ id: 'agentsShrink', label: 'Agents (incl. Shrinkage)' });
+        }
+        tabs.push(
+            { id: 'calls', label: 'Calls per Interval' },
+            { id: 'occupancy', label: 'Occupancy' }
+        );
+
+        document.getElementById('tabBar').innerHTML = tabs.map((t, i) =>
+            `<button class="${i === 0 ? 'active' : ''}" onclick="switchTab('${t.id}', this)">${t.label}</button>`
+        ).join('');
+
+        let tabContentsHTML = '';
+        for (let tab of tabs) {
+            tabContentsHTML += `<div id="tab-${tab.id}" class="tab-content ${tab.id === tabs[0].id ? 'active' : ''}">`;
+            tabContentsHTML += `<button class="copy-btn" onclick="copyTable('table-${tab.id}')">Copy to clipboard</button>`;
+            tabContentsHTML += buildTable(tab.id, days, intervals, results, summary.fractional);
+            tabContentsHTML += `</div>`;
+        }
+        document.getElementById('tabContents').innerHTML = tabContentsHTML;
+
+        resultsDiv.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function buildTable(type, days, intervals, results, fractional) {
+        let html = '<div class="results-table" style="overflow-x:auto;"><table id="table-' + type + '">';
+        html += '<thead><tr><th>Interval</th>';
+        for (let day of days) html += `<th style="text-align:right;">${day}</th>`;
+        html += '</tr></thead><tbody>';
+
+        let allValues = [];
+        for (let day of days) {
+            for (let interval of intervals) {
+                let v = getValueForType(type, results[day][interval]);
+                if (v > 0) allValues.push(v);
+            }
+        }
+        let minVal = allValues.length ? Math.min(...allValues) : 0;
+        let maxVal = allValues.length ? Math.max(...allValues) : 0;
+
+        let dayTotals = {};
+        for (let day of days) {
+            dayTotals[day] = { agents: 0, agentsShrink: 0, calls: 0, erlang: 0 };
+        }
+
+        for (let interval of intervals) {
+            html += `<tr><td>${interval}</td>`;
+            for (let day of days) {
+                let r = results[day][interval];
+                let v = getValueForType(type, r);
+                let display = formatValue(type, v, fractional);
+                let heatClass = v > 0 ? getHeatClass(v, minVal, maxVal) : '';
+                html += `<td style="text-align:right;" class="${heatClass}">${display}</td>`;
+
+                dayTotals[day].agents += r.agents;
+                dayTotals[day].agentsShrink += r.agentsWithShrinkage;
+                dayTotals[day].calls += r.calls;
+                dayTotals[day].erlang += r.erlang;
+            }
+            html += '</tr>';
+        }
+
+        // Totals row
+        html += '<tr class="day-totals-row"><td>Total</td>';
+        for (let day of days) {
+            let dt = dayTotals[day];
+            if (type === 'agents') html += `<td style="text-align:right;">${fractional ? fmtNum(dt.agents, 2) : fmtInt(dt.agents)}</td>`;
+            else if (type === 'agentsShrink') html += `<td style="text-align:right;">${fractional ? fmtNum(dt.agentsShrink, 2) : fmtInt(dt.agentsShrink)}</td>`;
+            else if (type === 'calls') html += `<td style="text-align:right;">${fmtNum(dt.calls, 1)}</td>`;
+            else if (type === 'occupancy') {
+                let dayOcc = dt.agents > 0 ? dt.erlang / dt.agents : 0;
+                let cls = dayOcc > 0.85 ? 'occ-high' : dayOcc > 0.75 ? 'occ-warn' : 'occ-good';
+                html += `<td style="text-align:right;" class="${cls}">${fmtPct(dayOcc * 100, 1)}</td>`;
+            }
+        }
+        html += '</tr>';
+
+        html += '</tbody></table></div>';
+        return html;
+    }
+
+    function getValueForType(type, r) {
+        if (type === 'agents') return r.agents;
+        if (type === 'agentsShrink') return r.agentsWithShrinkage;
+        if (type === 'calls') return r.calls;
+        if (type === 'occupancy') return r.occupancy;
+        return 0;
+    }
+
+    function formatValue(type, v, fractional) {
+        if (type === 'agents' || type === 'agentsShrink') return v === 0 ? '-' : (fractional ? fmtNum(v, 2) : fmtInt(v));
+        if (type === 'calls') return v === 0 ? '-' : fmtNum(v, 1);
+        if (type === 'occupancy') {
+            if (v === 0) return '-';
+            let cls = v > 0.85 ? 'occ-high' : v > 0.75 ? 'occ-warn' : 'occ-good';
+            return `<span class="${cls}">${fmtPct(v * 100, 1)}</span>`;
+        }
+        return v;
+    }
+
+    function getHeatClass(v, min, max) {
+        if (max === min) return 'cell-heat-1';
+        let pct = (v - min) / (max - min);
+        if (pct < 0.2) return 'cell-heat-1';
+        if (pct < 0.4) return 'cell-heat-2';
+        if (pct < 0.6) return 'cell-heat-3';
+        if (pct < 0.8) return 'cell-heat-4';
+        return 'cell-heat-5';
+    }
+
+    function switchTab(id, btn) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + id).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    function copyTable(tableId) {
+        let table = document.getElementById(tableId);
+        let rows = table.querySelectorAll('tr');
+        let text = '';
+        rows.forEach(row => {
+            let cells = row.querySelectorAll('th, td');
+            let rowText = [];
+            cells.forEach(cell => rowText.push(cell.textContent.trim()));
+            text += rowText.join('\t') + '\n';
+        });
+        navigator.clipboard.writeText(text).then(() => {
+            let btn = table.closest('.tab-content').querySelector('.copy-btn');
+            let orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = orig, 2000);
+        });
+    }
+    </script>
+</body>
+</html>

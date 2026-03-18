@@ -297,6 +297,39 @@
     </div>
 
     <script>
+        // ── Locale number formatting & parsing ──
+        function fmtNum(v, decimals) {
+            return v.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+        function fmtInt(v) {
+            return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
+        function fmtPct(v, decimals) {
+            return fmtNum(v, decimals !== undefined ? decimals : 1) + '%';
+        }
+        function parseLocalNumber(s) {
+            if (s === undefined || s === null) return NaN;
+            s = String(s).trim();
+            s = s.replace(/[\s\u00A0]/g, '');
+            let lastComma = s.lastIndexOf(',');
+            let lastDot = s.lastIndexOf('.');
+            if (lastComma > -1 && lastDot > -1) {
+                if (lastComma > lastDot) {
+                    s = s.replace(/\./g, '').replace(',', '.');
+                } else {
+                    s = s.replace(/,/g, '');
+                }
+            } else if (lastComma > -1) {
+                let afterComma = s.substring(lastComma + 1);
+                if (/^\d{3}$/.test(afterComma) && s.indexOf(',') === lastComma) {
+                    s = s.replace(',', '');
+                } else {
+                    s = s.replace(/,/g, '.');
+                }
+            }
+            return parseFloat(s);
+        }
+
         // Global state
         let rawData = [];
         let processedData = [];
@@ -630,7 +663,8 @@
                     if (rawVol === undefined || rawVol === null || rawVol === '') {
                         volume = 0;
                     } else {
-                        volume = parseFloat(rawVol) || 0;
+                        const parsed = parseLocalNumber(rawVol);
+                        volume = isNaN(parsed) ? 0 : parsed;
                     }
                 }
 
@@ -733,7 +767,7 @@
 
             document.getElementById('summaryGrid').innerHTML = `
                 <div class="summary-item">
-                    <div class="value">${totalCalls.toLocaleString()}</div>
+                    <div class="value">${fmtInt(totalCalls)}</div>
                     <div class="label">Total Calls</div>
                 </div>
                 <div class="summary-item">
@@ -770,8 +804,8 @@
             queueStats.forEach(q => {
                 tableHTML += `<tr>
                     <td>${q.queue}</td>
-                    <td>${q.total.toLocaleString()}</td>
-                    <td>${q.perWeek.toLocaleString()}</td>
+                    <td>${fmtInt(q.total)}</td>
+                    <td>${fmtInt(q.perWeek)}</td>
                 </tr>`;
             });
             tableHTML += '</table>';
@@ -819,11 +853,11 @@
                 const s = stats[q];
                 tableHTML += `<tr>
                     <td>${q}</td>
-                    <td>${Math.round(s.mean).toLocaleString()}</td>
-                    <td>${Math.round(s.std).toLocaleString()}</td>
-                    <td>${s.cv.toFixed(1)}%</td>
-                    <td>${s.min.toLocaleString()}</td>
-                    <td>${s.max.toLocaleString()}</td>
+                    <td>${fmtInt(Math.round(s.mean))}</td>
+                    <td>${fmtInt(Math.round(s.std))}</td>
+                    <td>${fmtPct(s.cv, 1)}</td>
+                    <td>${fmtInt(s.min)}</td>
+                    <td>${fmtInt(s.max)}</td>
                 </tr>`;
             });
             tableHTML += '</table>';
@@ -887,7 +921,7 @@
 
                 html += `<div class="card queue-section">
                     <h2>${queue}</h2>
-                    <p><strong>Calls analyzed:</strong> ${qTotal.toLocaleString()} (excluding ${excludeWeeks.length} weeks)</p>`;
+                    <p><strong>Calls analyzed:</strong> ${fmtInt(qTotal)} (excluding ${excludeWeeks.length} weeks)</p>`;
 
                 // Weekly pattern — exclude days with negligible volume (<1%)
                 const weeklyPattern = {};
@@ -901,7 +935,7 @@
                 html += `<h3>Weekly Pattern <button class="copy-btn" onclick="copyTable('weekly-${qIdx}')">Copy</button></h3>
                     <table id="weekly-${qIdx}">
                         <tr>${activeWeekAbbrev.map(d => `<th>${d}</th>`).join('')}</tr>
-                        <tr>${activeWeekDays.map(d => `<td>${weeklyPattern[d].toFixed(1)}%</td>`).join('')}</tr>
+                        <tr>${activeWeekDays.map(d => `<td>${fmtPct(weeklyPattern[d], 1)}</td>`).join('')}</tr>
                     </table>
                     <div class="chart-container">
                         <canvas id="weekly-chart-${qIdx}"></canvas>
@@ -940,7 +974,7 @@
                         activeDayOrder.forEach(d => {
                             const count = intradayData[`${interval}-${d}`] || 0;
                             const pct = dayTotals[d] > 0 ? (count / dayTotals[d] * 100) : 0;
-                            html += `<td>${pct.toFixed(2)}%</td>`;
+                            html += `<td>${fmtPct(pct, 2)}</td>`;
                         });
                         html += '</tr>';
                     });
