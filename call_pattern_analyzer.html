@@ -1,3 +1,7 @@
+<!--
+    Call Pattern Analyzer
+    Copyright © 2026 ContactSport B.V.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,6 +48,16 @@
         .drop-zone input {
             display: none;
         }
+        .drop-zone.file-selected {
+            border-style: solid;
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+        .drop-zone .filename {
+            font-weight: 600;
+            color: #2e7d32;
+            word-break: break-all;
+        }
         .config-section {
             background: white;
             border-radius: 8px;
@@ -69,6 +83,58 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+        }
+        .config-item.narrow {
+            max-width: 280px;
+        }
+        .input-mode-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .input-mode-toggle button {
+            padding: 8px 16px;
+            font-size: 13px;
+            background: #f8f9fa;
+            color: #555;
+            border: 1px solid #ddd;
+        }
+        .input-mode-toggle button.active {
+            background: #041E41;
+            color: white;
+            border-color: #041E41;
+        }
+        .input-mode-toggle button.recommended {
+            position: relative;
+        }
+        .input-mode-toggle button.recommended::after {
+            content: '✓ detected';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #4caf50;
+            color: white;
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 8px;
+        }
+        .input-mode-content {
+            display: none;
+        }
+        .input-mode-content.active {
+            display: block;
+        }
+        .mode-description {
+            font-size: 12px;
+            color: #666;
+            margin: -5px 0 15px 0;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #041E41;
+        }
+        .mode-columns {
+            margin-bottom: 10px;
         }
         button {
             background: #041E41;
@@ -226,7 +292,15 @@
         <img src="vanad-logo.svg" alt="Vanad Interactions" style="height: 32px;">
         <h1 style="margin: 0;">Call Pattern Analyzer</h1>
     </div>
-    <p>Upload call detail records to extract weekly and intraday call patterns for workforce planning.</p>
+
+    <div class="card" style="margin-bottom:20px;">
+        <p style="margin:0 0 10px;"><strong>Analyze historical call data to extract patterns for capacity planning.</strong></p>
+        <p style="margin:0; font-size:14px; color:#555;">
+            Upload an export from your ACD/contact center with call records or interval-aggregated data.
+            The tool analyzes the weekly pattern (distribution across days) and intraday pattern (distribution across intervals) per queue.
+            Use these patterns in the Erlang Calculator to determine required staffing.
+        </p>
+    </div>
 
     <div class="upload-section">
         <div class="drop-zone" id="dropZone">
@@ -237,32 +311,98 @@
     </div>
 
     <div class="config-section hidden" id="configSection">
-        <h3>Column Mapping</h3>
+        <h3>Data Type</h3>
+        <p style="font-size:13px; color:#666; margin-bottom:15px;">
+            Select the type of data in your file. The tool will attempt to auto-detect this.
+        </p>
+        <div class="input-mode-toggle" id="slModeToggle">
+            <button id="btnModeInterval" class="active" onclick="setDataMode('interval')">Interval Statistics</button>
+            <button id="btnModeCDR" onclick="setDataMode('cdr')">Call Detail Records (CDR)</button>
+        </div>
+        <p id="modeDescInterval" class="mode-description">Your data has pre-aggregated metrics per time interval (e.g., calls offered, SL%, abandon rate per 15-minute block).</p>
+        <p id="modeDescCDR" class="mode-description" style="display:none;">Your data has one row per individual call with timestamps, wait times, and outcomes.</p>
+
+        <h4 style="margin:20px 0 10px; color:#041E41;">Column Mapping</h4>
+        <p style="font-size:13px; color:#666; margin-bottom:15px;">
+            Select which columns from your file should be used. The tool will attempt to auto-detect the correct columns.
+        </p>
+
         <div class="config-grid">
             <div class="config-item">
-                <label>Date/Time Column</label>
+                <label>Date/Time *</label>
                 <select id="colDateTime"></select>
+                <small style="color:#888; font-size:11px;">Timestamp of the call or interval</small>
             </div>
             <div class="config-item">
-                <label>Time Column (optional, if separate)</label>
+                <label>Time (only if separate)</label>
                 <select id="colTime"></select>
+                <small style="color:#888; font-size:11px;">Only needed if time is in a separate column from date</small>
             </div>
             <div class="config-item">
-                <label>Queue/Skill Column (optional)</label>
+                <label>Queue / Skill / Line</label>
                 <select id="colQueue"></select>
-            </div>
-            <div class="config-item">
-                <label>Volume Column (optional, if aggregated data)</label>
-                <select id="colVolume"></select>
+                <small style="color:#888; font-size:11px;">Grouping for per-queue/skill analysis</small>
             </div>
         </div>
+
+        <!-- Statistics-specific columns -->
+        <div id="cols-interval" class="mode-columns">
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Call Volume</label>
+                    <select id="colVolume"></select>
+                    <small style="color:#888; font-size:11px;">Call count per interval (e.g., "Offered", "Calls")</small>
+                </div>
+                <div class="config-item">
+                    <label>Service Level %</label>
+                    <select id="colSL"></select>
+                    <small style="color:#888; font-size:11px;">Percentage answered within SL threshold</small>
+                </div>
+                <div class="config-item">
+                    <label>Abandon %</label>
+                    <select id="colAbandon"></select>
+                    <small style="color:#888; font-size:11px;">Percentage of abandoned calls</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- CDR-specific columns -->
+        <div id="cols-cdr" class="mode-columns" style="display:none;">
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Wait Time (seconds)</label>
+                    <select id="colWaitTime"></select>
+                    <small style="color:#888; font-size:11px;">Time until answered (e.g., "Wait Time", "Ring Time")</small>
+                </div>
+                <div class="config-item">
+                    <label>Call Outcome</label>
+                    <select id="colOutcome"></select>
+                    <small style="color:#888; font-size:11px;">Answered/Abandoned status (e.g., "Is_Abandoned")</small>
+                </div>
+                <div class="config-item">
+                    <label>SL Threshold (seconds)</label>
+                    <input type="number" id="slThreshold" value="20" min="1" style="width:80px;">
+                    <small style="color:#888; font-size:11px;">Calls answered within this time count as "within SL"</small>
+                </div>
+            </div>
+        </div>
+
+        <h4 style="margin:20px 0 10px; color:#041E41;">Optional: AHT Analysis</h4>
+        <div class="config-item narrow">
+            <label>Average Handling Time (AHT)</label>
+            <select id="colAHT"></select>
+            <small style="color:#888; font-size:11px;">AHT in seconds per call or interval</small>
+        </div>
+
+        <h4 style="margin:20px 0 10px; color:#041E41;">Analysis Settings</h4>
         <div class="config-grid">
             <div class="config-item">
-                <label>Weeks to Analyze</label>
+                <label>Number of Weeks</label>
                 <input type="number" id="weeksToAnalyze" value="13" min="1" max="52">
+                <small style="color:#888; font-size:11px;">Last X complete weeks to analyze</small>
             </div>
         </div>
-        <button id="analyzeBtn" onclick="runAnalysis()">Analyze Patterns</button>
+        <button id="analyzeBtn" onclick="runAnalysis()" style="margin-top:15px;">Analyze Patterns</button>
     </div>
 
     <div class="results-section" id="resultsSection">
@@ -270,6 +410,13 @@
             <h2>Data Overview</h2>
             <div class="summary-grid" id="summaryGrid"></div>
             <div id="queueSummaryTable"></div>
+        </div>
+
+        <div class="card hidden" id="ahtCard">
+            <h2>Average Handling Time (AHT)
+                <button class="copy-btn" onclick="copyAHT()">Copy</button>
+            </h2>
+            <div class="summary-grid" id="ahtGrid"></div>
         </div>
 
         <div class="card">
@@ -363,6 +510,18 @@
         });
 
         function handleFile(file) {
+            // Show filename in drop zone
+            dropZone.classList.add('file-selected');
+            dropZone.innerHTML = `
+                <p><strong>Selected file:</strong></p>
+                <p class="filename">${file.name}</p>
+                <p style="font-size: 12px; color: #666; margin-top: 8px;">Click to select a different file</p>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+            `;
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                if (e.target.files.length) handleFile(e.target.files[0]);
+            });
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 const data = e.target.result;
@@ -448,8 +607,13 @@
             const timeSelect = document.getElementById('colTime');
             const queueSelect = document.getElementById('colQueue');
             const volumeSelect = document.getElementById('colVolume');
+            const ahtSelect = document.getElementById('colAHT');
+            const slSelect = document.getElementById('colSL');
+            const abandonSelect = document.getElementById('colAbandon');
+            const waitTimeSelect = document.getElementById('colWaitTime');
+            const outcomeSelect = document.getElementById('colOutcome');
 
-            [dateTimeSelect, timeSelect, queueSelect, volumeSelect].forEach(select => {
+            [dateTimeSelect, timeSelect, queueSelect, volumeSelect, ahtSelect, slSelect, abandonSelect, waitTimeSelect, outcomeSelect].forEach(select => {
                 select.innerHTML = '<option value="">-- Select --</option>';
                 columns.forEach(col => {
                     const option = document.createElement('option');
@@ -463,6 +627,12 @@
             const dateTimeScores = {};
             const timeOnlyScores = {};
             const queueScores = {};
+            const ahtScores = {};
+            const volumeScores = {};
+            const slScores = {};
+            const abandonScores = {};
+            const waitTimeScores = {};
+            const outcomeScores = {};
 
             // Patterns with priority scores (higher = more specific)
             // Keep name scores moderate - data analysis will add more weight
@@ -495,6 +665,23 @@
                 { pattern: 'line', score: 15 }
             ];
 
+            // Volume patterns (for interval statistics - call counts)
+            const volumePatterns = [
+                { pattern: 'offered', score: 95 },
+                { pattern: 'calls_offered', score: 95 },
+                { pattern: 'call_volume', score: 90 },
+                { pattern: 'callvolume', score: 90 },
+                { pattern: 'total_calls', score: 90 },
+                { pattern: 'totalcalls', score: 90 },
+                { pattern: 'num_calls', score: 85 },
+                { pattern: 'call_count', score: 85 },
+                { pattern: 'callcount', score: 85 },
+                { pattern: 'inbound', score: 75 },
+                { pattern: 'volume', score: 70 },
+                { pattern: 'calls', score: 60 },
+                { pattern: 'aangeboden', score: 85 }  // Dutch
+            ];
+
             // Sample first 100 rows for data analysis
             const sampleRows = rawData.slice(0, 100);
 
@@ -506,11 +693,135 @@
                 { pattern: 'time', score: 50 }
             ];
 
+            // AHT patterns (Average Handling Time)
+            const ahtPatterns = [
+                { pattern: 'aht', score: 90 },
+                { pattern: 'average_handling', score: 85 },
+                { pattern: 'averagehandling', score: 85 },
+                { pattern: 'avg_handling', score: 80 },
+                { pattern: 'handling_time', score: 70 },
+                { pattern: 'handlingtime', score: 70 },
+                { pattern: 'handle_time', score: 65 },
+                { pattern: 'act', score: 50 },  // Average Call Time
+                { pattern: 'average_call_time', score: 60 }
+            ];
+
+            // Service Level patterns (for interval statistics - percentages)
+            const slPatterns = [
+                { pattern: 'service_level', score: 90 },
+                { pattern: 'servicelevel', score: 90 },
+                { pattern: 'sl%', score: 85 },
+                { pattern: 'sl_', score: 80 },
+                { pattern: '_sl', score: 75 }
+            ];
+            // Patterns that indicate CDR per-call SL flag, NOT interval SL%
+            const slExcludePatterns = ['in_servicelevel', 'in_service_level', 'in_sl', 'met_sl', 'within_sl'];
+
+            // Abandonment patterns (for interval statistics - percentages/rates)
+            const abandonPatterns = [
+                { pattern: 'abandon%', score: 95 },
+                { pattern: 'abandon_rate', score: 95 },
+                { pattern: 'abandonrate', score: 95 },
+                { pattern: 'aban%', score: 90 },
+                { pattern: 'aban_rate', score: 90 },
+                { pattern: 'verlaten%', score: 85 },  // Dutch
+                { pattern: 'abandon_pct', score: 85 },
+                { pattern: 'pct_abandon', score: 85 }
+            ];
+            // Patterns that indicate CDR outcome, NOT interval abandon rate
+            const abandonExcludePatterns = ['is_abandon', 'isaban', 'was_abandon'];
+
+            // Wait time patterns (for CDR)
+            const waitTimePatterns = [
+                { pattern: 'wait_time', score: 90 },
+                { pattern: 'waittime', score: 90 },
+                { pattern: 'waiting_time', score: 85 },
+                { pattern: 'ring_time', score: 80 },
+                { pattern: 'ringtime', score: 80 },
+                { pattern: 'queue_time', score: 75 },
+                { pattern: 'time_to_answer', score: 85 },
+                { pattern: 'speed_of_answer', score: 85 },
+                { pattern: 'asa', score: 70 },
+                { pattern: 'wachttijd', score: 80 }  // Dutch
+            ];
+
+            // Outcome patterns (for CDR - boolean/status per call)
+            const outcomePatterns = [
+                { pattern: 'is_abandon', score: 95 },
+                { pattern: 'isaban', score: 95 },
+                { pattern: 'is_answer', score: 95 },
+                { pattern: 'answered', score: 90 },
+                { pattern: 'abandoned', score: 90 },
+                { pattern: 'in_servicelevel', score: 85 },  // Per-call SL flag
+                { pattern: 'in_service_level', score: 85 },
+                { pattern: 'outcome', score: 85 },
+                { pattern: 'disposition', score: 85 },
+                { pattern: 'call_result', score: 80 },
+                { pattern: 'result', score: 70 },
+                { pattern: 'status', score: 60 },
+                { pattern: 'uitkomst', score: 80 }  // Dutch
+            ];
+
+            // CDR indicator patterns - strong signals that data is call detail records
+            // Caller identification patterns
+            const callerIdPatterns = [
+                { pattern: 'caller_id', score: 95 },
+                { pattern: 'callerid', score: 95 },
+                { pattern: 'caller_number', score: 90 },
+                { pattern: 'phone_number', score: 85 },
+                { pattern: 'phonenumber', score: 85 },
+                { pattern: 'contact_number', score: 80 },
+                { pattern: 'ani', score: 85 },  // Automatic Number Identification
+                { pattern: 'dnis', score: 80 }, // Dialed Number Identification Service
+                { pattern: 'from_number', score: 80 },
+                { pattern: 'telefoonnummer', score: 85 }  // Dutch
+            ];
+
+            // Agent/employee patterns (individual handling = CDR)
+            const agentPatterns = [
+                { pattern: 'employee', score: 90 },
+                { pattern: 'agent_name', score: 95 },
+                { pattern: 'agentname', score: 95 },
+                { pattern: 'agent_id', score: 90 },
+                { pattern: 'agentid', score: 90 },
+                { pattern: 'handled_by', score: 90 },
+                { pattern: 'representative', score: 85 },
+                { pattern: 'rep_name', score: 85 },
+                { pattern: 'medewerker', score: 85 },  // Dutch
+                { pattern: 'fullname', score: 70 }
+            ];
+
+            // Call event timestamp patterns (multiple timestamps = CDR)
+            const callEventPatterns = [
+                { pattern: 'call_received', score: 95 },
+                { pattern: 'call_answered', score: 95 },
+                { pattern: 'call_hangup', score: 95 },
+                { pattern: 'call_end', score: 90 },
+                { pattern: 'call_start', score: 90 },
+                { pattern: 'call_transfer', score: 90 },
+                { pattern: 'answered_at', score: 85 },
+                { pattern: 'started_at', score: 85 },
+                { pattern: 'ended_at', score: 85 },
+                { pattern: 'connected_at', score: 85 }
+            ];
+
+            // CDR indicator scores (aggregated across all columns)
+            let callerIdScore = 0;
+            let agentScore = 0;
+            let callEventScore = 0;
+            let callEventCount = 0;
+
             columns.forEach(col => {
                 const lower = col.toLowerCase();
                 dateTimeScores[col] = 0;
                 timeOnlyScores[col] = 0;
                 queueScores[col] = 0;
+                ahtScores[col] = 0;
+                volumeScores[col] = 0;
+                slScores[col] = 0;
+                abandonScores[col] = 0;
+                waitTimeScores[col] = 0;
+                outcomeScores[col] = 0;
 
                 // Check if column looks like a metric (should not be datetime)
                 const isExcluded = dateExcludePatterns.some(p => lower.includes(p));
@@ -532,6 +843,62 @@
                 for (const { pattern, score } of queueNamePatterns) {
                     if (lower.includes(pattern)) {
                         queueScores[col] = Math.max(queueScores[col], score);
+                    }
+                }
+                for (const { pattern, score } of ahtPatterns) {
+                    if (lower.includes(pattern)) {
+                        ahtScores[col] = Math.max(ahtScores[col], score);
+                    }
+                }
+                for (const { pattern, score } of volumePatterns) {
+                    if (lower.includes(pattern)) {
+                        volumeScores[col] = Math.max(volumeScores[col], score);
+                    }
+                }
+                // Only score as SL% if it's NOT a per-call SL flag (CDR indicator)
+                const isSlPerCall = slExcludePatterns.some(p => lower.includes(p));
+                if (!isSlPerCall) {
+                    for (const { pattern, score } of slPatterns) {
+                        if (lower.includes(pattern)) {
+                            slScores[col] = Math.max(slScores[col], score);
+                        }
+                    }
+                }
+                // Only score as abandon% if it's NOT a CDR outcome column
+                const isAbandonOutcome = abandonExcludePatterns.some(p => lower.includes(p));
+                if (!isAbandonOutcome) {
+                    for (const { pattern, score } of abandonPatterns) {
+                        if (lower.includes(pattern)) {
+                            abandonScores[col] = Math.max(abandonScores[col], score);
+                        }
+                    }
+                }
+                for (const { pattern, score } of waitTimePatterns) {
+                    if (lower.includes(pattern)) {
+                        waitTimeScores[col] = Math.max(waitTimeScores[col], score);
+                    }
+                }
+                for (const { pattern, score } of outcomePatterns) {
+                    if (lower.includes(pattern)) {
+                        outcomeScores[col] = Math.max(outcomeScores[col], score);
+                    }
+                }
+
+                // Score CDR indicators (aggregated across all columns)
+                for (const { pattern, score } of callerIdPatterns) {
+                    if (lower.includes(pattern)) {
+                        callerIdScore = Math.max(callerIdScore, score);
+                    }
+                }
+                for (const { pattern, score } of agentPatterns) {
+                    if (lower.includes(pattern)) {
+                        agentScore = Math.max(agentScore, score);
+                    }
+                }
+                for (const { pattern, score } of callEventPatterns) {
+                    if (lower.includes(pattern)) {
+                        callEventScore = Math.max(callEventScore, score);
+                        callEventCount++;
                     }
                 }
 
@@ -610,6 +977,24 @@
             const bestQueue = Object.entries(queueScores)
                 .filter(([_, score]) => score > 0)
                 .sort((a, b) => b[1] - a[1])[0];
+            const bestAHT = Object.entries(ahtScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestVolume = Object.entries(volumeScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestSL = Object.entries(slScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestAbandon = Object.entries(abandonScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestWaitTime = Object.entries(waitTimeScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
+            const bestOutcome = Object.entries(outcomeScores)
+                .filter(([_, score]) => score > 0)
+                .sort((a, b) => b[1] - a[1])[0];
 
             if (bestDateTime) dateTimeSelect.value = bestDateTime[0];
             // Only suggest separate time column if date column doesn't have time component
@@ -617,8 +1002,59 @@
                 timeSelect.value = bestTimeOnly[0];
             }
             if (bestQueue) queueSelect.value = bestQueue[0];
+            if (bestAHT) ahtSelect.value = bestAHT[0];
+            if (bestVolume) volumeSelect.value = bestVolume[0];
+            if (bestSL) slSelect.value = bestSL[0];
+            if (bestAbandon) abandonSelect.value = bestAbandon[0];
+            if (bestWaitTime) waitTimeSelect.value = bestWaitTime[0];
+            if (bestOutcome) outcomeSelect.value = bestOutcome[0];
+
+            // Detect which data type looks more likely and show recommendation
+            // Interval score: SL%, Abandon%, and Volume columns indicate aggregated data
+            const intervalScore = (bestSL ? bestSL[1] : 0) + (bestAbandon ? bestAbandon[1] : 0) + (bestVolume ? bestVolume[1] * 0.5 : 0);
+            // CDR score: combine wait time, outcome, and CDR indicators (caller ID, agent, call events)
+            let cdrScore = (bestWaitTime ? bestWaitTime[1] : 0) + (bestOutcome ? bestOutcome[1] : 0);
+            cdrScore += callerIdScore;  // Strong CDR indicator
+            cdrScore += agentScore;      // Strong CDR indicator
+            // Multiple call event columns (call_received, call_answered, etc.) is a very strong CDR signal
+            if (callEventCount >= 2) {
+                cdrScore += callEventScore + (callEventCount * 30);  // Bonus for multiple timestamps
+            } else if (callEventCount === 1) {
+                cdrScore += callEventScore;
+            }
+
+            document.getElementById('btnModeInterval').classList.remove('recommended');
+            document.getElementById('btnModeCDR').classList.remove('recommended');
+
+            if (cdrScore > intervalScore && cdrScore > 50) {
+                document.getElementById('btnModeCDR').classList.add('recommended');
+                setDataMode('cdr');
+            } else {
+                // Default to interval mode, mark as recommended if we have interval-specific columns
+                if (intervalScore > cdrScore && intervalScore > 50) {
+                    document.getElementById('btnModeInterval').classList.add('recommended');
+                }
+                setDataMode('interval');
+            }
 
             document.getElementById('configSection').classList.remove('hidden');
+        }
+
+        let currentDataMode = 'interval';
+
+        function setDataMode(mode) {
+            currentDataMode = mode;
+            // Update toggle buttons
+            document.querySelectorAll('#slModeToggle button').forEach(b => b.classList.remove('active'));
+            document.getElementById(mode === 'cdr' ? 'btnModeCDR' : 'btnModeInterval').classList.add('active');
+
+            // Update mode descriptions
+            document.getElementById('modeDescInterval').style.display = mode === 'interval' ? 'block' : 'none';
+            document.getElementById('modeDescCDR').style.display = mode === 'cdr' ? 'block' : 'none';
+
+            // Update column sections
+            document.getElementById('cols-interval').style.display = mode === 'interval' ? 'block' : 'none';
+            document.getElementById('cols-cdr').style.display = mode === 'cdr' ? 'block' : 'none';
         }
 
         function runAnalysis() {
@@ -640,6 +1076,12 @@
             const timeCol = document.getElementById('colTime').value;
             const queueCol = document.getElementById('colQueue').value;
             const volumeCol = document.getElementById('colVolume').value;
+            const ahtCol = document.getElementById('colAHT').value;
+            const slCol = document.getElementById('colSL').value;
+            const abandonCol = document.getElementById('colAbandon').value;
+            const waitTimeCol = document.getElementById('colWaitTime').value;
+            const outcomeCol = document.getElementById('colOutcome').value;
+            const slThreshold = parseInt(document.getElementById('slThreshold').value) || 20;
             const weeksToAnalyze = parseInt(document.getElementById('weeksToAnalyze').value) || 13;
 
             // Process each row
@@ -668,6 +1110,70 @@
                     }
                 }
 
+                // AHT: parse if column selected
+                let aht = null;
+                if (ahtCol && row[ahtCol] !== undefined && row[ahtCol] !== null && row[ahtCol] !== '') {
+                    const parsedAht = parseLocalNumber(row[ahtCol]);
+                    if (!isNaN(parsedAht) && parsedAht >= 0) {
+                        aht = parsedAht;
+                    }
+                }
+
+                // SL%: parse if column selected
+                let sl = null;
+                if (slCol && row[slCol] !== undefined && row[slCol] !== null && row[slCol] !== '') {
+                    const parsedSL = parseLocalNumber(row[slCol]);
+                    if (!isNaN(parsedSL) && parsedSL >= 0 && parsedSL <= 100) {
+                        sl = parsedSL;
+                    }
+                }
+
+                // Abandon%: parse if column selected
+                let abandon = null;
+                if (abandonCol && row[abandonCol] !== undefined && row[abandonCol] !== null && row[abandonCol] !== '') {
+                    const parsedAbandon = parseLocalNumber(row[abandonCol]);
+                    if (!isNaN(parsedAbandon) && parsedAbandon >= 0 && parsedAbandon <= 100) {
+                        abandon = parsedAbandon;
+                    }
+                }
+
+                // Wait time: parse if column selected (for CDR)
+                let waitTime = null;
+                if (waitTimeCol && row[waitTimeCol] !== undefined && row[waitTimeCol] !== null && row[waitTimeCol] !== '') {
+                    const parsedWait = parseLocalNumber(row[waitTimeCol]);
+                    if (!isNaN(parsedWait) && parsedWait >= 0) {
+                        waitTime = parsedWait;
+                    }
+                }
+
+                // Outcome: parse if column selected (for CDR)
+                let outcome = null;
+                let isAnswered = null;
+                let isAbandoned = null;
+                if (outcomeCol && row[outcomeCol] !== undefined && row[outcomeCol] !== null && row[outcomeCol] !== '') {
+                    outcome = String(row[outcomeCol]).trim().toLowerCase();
+                    const colNameLower = outcomeCol.toLowerCase();
+
+                    // Check if column name indicates it's an "is_abandoned" style flag
+                    const isAbandonedFlag = colNameLower.includes('abandon') || colNameLower.includes('verlat');
+
+                    if (isAbandonedFlag) {
+                        // Column like IS_ABANDONED: 1 = abandoned, 0 = answered
+                        isAbandoned = /^(1|true|yes|ja)$/i.test(outcome);
+                        isAnswered = /^(0|false|no|nee)$/i.test(outcome);
+                    } else {
+                        // Regular outcome column: detect by value
+                        isAnswered = /^(answered|beantwoord|handled|connected|1|yes|ja|true)$/i.test(outcome);
+                        isAbandoned = /^(abandon|abandoned|verlaten|dropped|0|no|nee|false)$/i.test(outcome);
+                    }
+                }
+
+                // Calculate SL hit for CDR (answered within threshold)
+                let slHit = null;
+                if (waitTime !== null && isAnswered === true) {
+                    slHit = waitTime <= slThreshold;
+                }
+
                 return {
                     date: parsed.date,
                     time: time,
@@ -675,7 +1181,15 @@
                     weekday: DAY_ORDER[parsed.date.getDay() === 0 ? 6 : parsed.date.getDay() - 1],
                     yearWeek: getYearWeek(parsed.date),
                     queue: queueCol ? (row[queueCol] || 'Unknown') : 'All Calls',
-                    volume: volume
+                    volume: volume,
+                    aht: aht,
+                    sl: sl,
+                    abandon: abandon,
+                    // CDR fields
+                    waitTime: waitTime,
+                    isAnswered: isAnswered,
+                    isAbandoned: isAbandoned,
+                    slHit: slHit
                 };
             }).filter(r => r !== null);
 
@@ -688,6 +1202,7 @@
 
             // Render results
             renderSummary();
+            renderAHT();
             renderWeeklyVolumes();
             recalculatePatterns();
         }
@@ -812,6 +1327,69 @@
             document.getElementById('queueSummaryTable').innerHTML = tableHTML;
         }
 
+        // Global variable to store calculated AHT for copying
+        let calculatedAHT = null;
+
+        function renderAHT() {
+            const ahtCard = document.getElementById('ahtCard');
+            const ahtGrid = document.getElementById('ahtGrid');
+
+            // Filter records that have AHT values
+            const recordsWithAHT = processedData.filter(r => r.aht !== null && r.volume > 0);
+
+            if (recordsWithAHT.length === 0) {
+                ahtCard.classList.add('hidden');
+                calculatedAHT = null;
+                return;
+            }
+
+            // Calculate weighted average AHT (weighted by volume)
+            let totalWeightedAHT = 0;
+            let totalVolume = 0;
+
+            recordsWithAHT.forEach(r => {
+                totalWeightedAHT += r.aht * r.volume;
+                totalVolume += r.volume;
+            });
+
+            const avgAHT = totalVolume > 0 ? totalWeightedAHT / totalVolume : 0;
+            calculatedAHT = avgAHT;
+
+            // Format AHT as mm:ss
+            const ahtMinutes = Math.floor(avgAHT / 60);
+            const ahtSeconds = Math.round(avgAHT % 60);
+            const ahtFormatted = `${ahtMinutes}:${String(ahtSeconds).padStart(2, '0')}`;
+
+            ahtGrid.innerHTML = `
+                <div class="summary-item">
+                    <div class="value">${fmtNum(avgAHT, 1)}</div>
+                    <div class="label">AHT (seconds)</div>
+                </div>
+                <div class="summary-item">
+                    <div class="value">${ahtFormatted}</div>
+                    <div class="label">AHT (mm:ss)</div>
+                </div>
+                <div class="summary-item">
+                    <div class="value">${fmtInt(totalVolume)}</div>
+                    <div class="label">Calls with AHT</div>
+                </div>
+            `;
+
+            ahtCard.classList.remove('hidden');
+        }
+
+        function copyAHT() {
+            if (calculatedAHT === null) return;
+
+            const ahtRounded = Math.round(calculatedAHT * 10) / 10;
+            navigator.clipboard.writeText(ahtRounded.toString()).then(() => {
+                const btn = document.querySelector('#ahtCard .copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = originalText, 1500);
+            });
+        }
+
         function renderWeeklyVolumes() {
             const weeks = [...new Set(processedData.map(r => r.yearWeek))].sort();
             const queues = [...new Set(processedData.map(r => r.queue))];
@@ -919,9 +1497,105 @@
                 const qTotal = sumVolume(qData);
                 if (qTotal === 0) return;
 
+                // Calculate AHT for this queue
+                const qRecordsWithAHT = qData.filter(r => r.aht !== null && r.volume > 0);
+                let queueAHT = null;
+                let queueAHTFormatted = '';
+                if (qRecordsWithAHT.length > 0) {
+                    let totalWeightedAHT = 0;
+                    let totalVol = 0;
+                    qRecordsWithAHT.forEach(r => {
+                        totalWeightedAHT += r.aht * r.volume;
+                        totalVol += r.volume;
+                    });
+                    queueAHT = totalVol > 0 ? totalWeightedAHT / totalVol : null;
+                    if (queueAHT !== null) {
+                        const mins = Math.floor(queueAHT / 60);
+                        const secs = Math.round(queueAHT % 60);
+                        queueAHTFormatted = `${mins}:${String(secs).padStart(2, '0')}`;
+                    }
+                }
+
+                // Calculate SL-Reachability regression for this queue
+                // Support both aggregated data (SL%, Abandon%) and CDR data (waitTime, outcome)
+                let regressionData = [];
+                let queueRegression = null;
+                let slReachHtml = '';
+                let dataSource = '';
+
+                // Method 1: Aggregated SL% and Abandon% columns
+                const qRecordsWithSLData = qData.filter(r => r.sl !== null && r.abandon !== null && r.volume > 0);
+                if (qRecordsWithSLData.length >= 10) {
+                    regressionData = qRecordsWithSLData.map(r => ({
+                        sl: r.sl,
+                        reachability: 100 - r.abandon,
+                        volume: r.volume
+                    }));
+                    dataSource = 'aggregated';
+                }
+
+                // Method 2: CDR data - calculate SL% and Abandon% per interval
+                if (regressionData.length < 10) {
+                    const cdrRecords = qData.filter(r => (r.isAnswered !== null || r.isAbandoned !== null));
+                    if (cdrRecords.length >= 20) {
+                        // Group by interval+weekday to get enough data points
+                        const intervalStats = {};
+                        cdrRecords.forEach(r => {
+                            const key = `${r.yearWeek}-${r.weekday}-${r.interval}`;
+                            if (!intervalStats[key]) {
+                                intervalStats[key] = { total: 0, answered: 0, slHits: 0, abandoned: 0 };
+                            }
+                            intervalStats[key].total += r.volume;
+                            if (r.isAnswered) {
+                                intervalStats[key].answered += r.volume;
+                                if (r.slHit) intervalStats[key].slHits += r.volume;
+                            }
+                            if (r.isAbandoned) intervalStats[key].abandoned += r.volume;
+                        });
+
+                        // Convert to regression data points (only intervals with enough calls)
+                        regressionData = Object.values(intervalStats)
+                            .filter(s => s.total >= 5 && (s.answered + s.abandoned) > 0)
+                            .map(s => {
+                                const offered = s.answered + s.abandoned;
+                                return {
+                                    sl: offered > 0 ? (s.slHits / offered * 100) : 0,
+                                    reachability: offered > 0 ? (s.answered / offered * 100) : 100,
+                                    volume: s.total
+                                };
+                            });
+                        if (regressionData.length >= 10) dataSource = 'cdr';
+                    }
+                }
+
+                // Show debug info if columns selected but insufficient data
+                const hasSlCols = document.getElementById('colSL').value || document.getElementById('colAbandon').value;
+                const hasCdrCols = document.getElementById('colWaitTime').value || document.getElementById('colOutcome').value;
+                if ((hasSlCols || hasCdrCols) && regressionData.length < 10) {
+                    const cdrCount = qData.filter(r => r.isAnswered !== null || r.isAbandoned !== null).length;
+                    slReachHtml = `<p style="color:#666; font-size:13px;"><em>SL-Reachability: ${regressionData.length} datapunten (minimaal 10 nodig). Aggregated: ${qRecordsWithSLData.length}, CDR: ${cdrCount}</em></p>`;
+                }
+
+                if (regressionData.length >= 10) {
+                    queueRegression = calculateRegression(regressionData);
+                    queueRegressionModels[qIdx] = queueRegression;
+
+                    if (queueRegression && Math.abs(queueRegression.r) >= 0.3) {
+                        const sourceLabel = dataSource === 'cdr' ? ' (calculated from CDR)' : '';
+                        slReachHtml = `
+                            <div style="background:#e8f4f8; border:1px solid #041E41; border-radius:8px; padding:12px; margin:10px 0; font-size:13px;">
+                                <strong>SL-Reachability Correlation${sourceLabel}:</strong> r=${fmtNum(queueRegression.r, 2)}, R²=${fmtPct(queueRegression.r2 * 100, 1)}, n=${queueRegression.n}
+                                <br><em style="color:#666;">Set reachability target in Erlang Calculator</em>
+                            </div>`;
+                    } else if (queueRegression) {
+                        slReachHtml = `<p style="color:#666; font-size:13px;"><em>SL-Reachability: correlation too weak (r=${fmtNum(queueRegression.r, 2)}, minimum 0.3 required)</em></p>`;
+                    }
+                }
+
                 html += `<div class="card queue-section">
-                    <h2>${queue}</h2>
-                    <p><strong>Calls analyzed:</strong> ${fmtInt(qTotal)} (excluding ${excludeWeeks.length} weeks)</p>`;
+                    <h2>${queue} <button class="copy-btn" style="background:#041E41;" onclick="useForForecast(${qIdx})">Use for forecast</button></h2>
+                    <p><strong>Calls analyzed:</strong> ${fmtInt(qTotal)} (excluding ${excludeWeeks.length} weeks)${queueAHT !== null ? ` &nbsp;|&nbsp; <strong>AHT:</strong> ${queueAHTFormatted} (${fmtNum(queueAHT, 0)} sec)` : ''}</p>
+                    ${slReachHtml}`;
 
                 // Weekly pattern — exclude days with negligible volume (<1%)
                 const weeklyPattern = {};
@@ -1151,6 +1825,62 @@
             return colors[index % colors.length];
         }
 
+        // SL-Reachability regression analysis
+        let queueRegressionModels = {};
+
+        function calculateRegression(data) {
+            // data: array of {sl, reachability, volume}
+            const n = data.length;
+            if (n < 3) return null;
+
+            const sumX = data.reduce((a, d) => a + d.sl, 0);
+            const sumY = data.reduce((a, d) => a + d.reachability, 0);
+            const sumXY = data.reduce((a, d) => a + d.sl * d.reachability, 0);
+            const sumX2 = data.reduce((a, d) => a + d.sl * d.sl, 0);
+            const sumY2 = data.reduce((a, d) => a + d.reachability * d.reachability, 0);
+
+            const meanX = sumX / n;
+            const meanY = sumY / n;
+
+            // Linear regression: y = slope * x + intercept
+            const denom = n * sumX2 - sumX * sumX;
+            if (denom === 0) return null;
+
+            const slope = (n * sumXY - sumX * sumY) / denom;
+            const intercept = meanY - slope * meanX;
+
+            // Pearson correlation coefficient
+            const numerator = n * sumXY - sumX * sumY;
+            const denomCorr = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+            const r = denomCorr !== 0 ? numerator / denomCorr : 0;
+            const r2 = r * r;
+
+            return { slope, intercept, r, r2, n, meanSL: meanX, meanReach: meanY };
+        }
+
+        function reachabilityToSL(regression, reachTarget) {
+            if (!regression || regression.slope === 0) return null;
+            let sl = (reachTarget - regression.intercept) / regression.slope;
+            return Math.max(0, Math.min(100, sl));
+        }
+
+        function updateRecommendedSL(qIdx) {
+            const input = document.getElementById(`reachTarget-${qIdx}`);
+            const display = document.getElementById(`slRecommend-${qIdx}`);
+            const regression = queueRegressionModels[qIdx];
+
+            if (!regression || !input || !display) return;
+
+            const reachTarget = parseFloat(input.value);
+            if (isNaN(reachTarget)) {
+                display.textContent = '-';
+                return;
+            }
+
+            const sl = reachabilityToSL(regression, reachTarget);
+            display.textContent = sl !== null ? fmtPct(sl, 1) : '-';
+        }
+
         function copyTable(tableId) {
             const table = document.getElementById(tableId);
             const rows = table.querySelectorAll('tr');
@@ -1163,6 +1893,101 @@
                 alert('Table copied to clipboard!');
             });
         }
+
+        function useForForecast(qIdx) {
+            const excludeInput = document.getElementById('excludeWeeks').value;
+            const excludeWeeks = excludeInput.split(',').map(w => w.trim()).filter(w => w);
+            const patternData = processedData.filter(r => !excludeWeeks.includes(r.yearWeek));
+
+            const queues = [...new Set(patternData.map(r => r.queue))].sort((a, b) => {
+                return sumVolume(patternData.filter(r => r.queue === b)) - sumVolume(patternData.filter(r => r.queue === a));
+            });
+
+            const queue = queues[qIdx];
+            const qData = patternData.filter(r => r.queue === queue);
+            const qTotal = sumVolume(qData);
+
+            // Weekly pattern
+            const weeklyPattern = {};
+            DAY_ORDER.forEach(d => weeklyPattern[d] = 0);
+            qData.forEach(r => weeklyPattern[r.weekday] += r.volume);
+            DAY_ORDER.forEach(d => weeklyPattern[d] = (weeklyPattern[d] / qTotal * 100));
+            const activeWeekDays = DAY_ORDER.filter(d => weeklyPattern[d] >= 1.0);
+            const activeWeekAbbrev = activeWeekDays.map(d => DAY_ABBREV[DAY_ORDER.indexOf(d)]);
+
+            // Build weekly pattern text (tab-separated)
+            const weeklyHeader = activeWeekAbbrev.join('\t');
+            const weeklyValues = activeWeekDays.map(d => fmtPct(weeklyPattern[d], 1)).join('\t');
+            const weeklyText = weeklyHeader + '\n' + weeklyValues;
+
+            // Intraday pattern
+            const intradayData = {};
+            qData.forEach(r => {
+                const key = `${r.interval}-${r.weekday}`;
+                intradayData[key] = (intradayData[key] || 0) + r.volume;
+            });
+
+            const dayTotals = {};
+            activeWeekDays.forEach(d => {
+                dayTotals[d] = sumVolume(qData.filter(r => r.weekday === d));
+            });
+
+            const intervals = generateIntervals();
+            const { activeIntervals } = detectOperatingHours(qData, intervals);
+
+            // Build intraday pattern text (tab-separated)
+            let intradayText = 'Interval\t' + activeWeekAbbrev.join('\t') + '\n';
+            activeIntervals.forEach(interval => {
+                let row = interval;
+                activeWeekDays.forEach(d => {
+                    const count = intradayData[`${interval}-${d}`] || 0;
+                    const pct = dayTotals[d] > 0 ? (count / dayTotals[d] * 100) : 0;
+                    row += '\t' + fmtPct(pct, 2);
+                });
+                intradayText += row + '\n';
+            });
+
+            // Calculate AHT for this queue if available
+            const recordsWithAHT = qData.filter(r => r.aht !== null && r.volume > 0);
+            let aht = null;
+            if (recordsWithAHT.length > 0) {
+                let totalWeightedAHT = 0;
+                let totalVolume = 0;
+                recordsWithAHT.forEach(r => {
+                    totalWeightedAHT += r.aht * r.volume;
+                    totalVolume += r.volume;
+                });
+                aht = totalVolume > 0 ? Math.round(totalWeightedAHT / totalVolume) : null;
+            }
+
+            // Get regression model if available
+            const regression = queueRegressionModels[qIdx];
+            let regressionData = null;
+            if (regression && Math.abs(regression.r) >= 0.3) {
+                regressionData = {
+                    slope: regression.slope,
+                    intercept: regression.intercept,
+                    r: regression.r,
+                    r2: regression.r2
+                };
+            }
+
+            // Pass data via URL hash (works with file:// protocol)
+            const forecastData = {
+                queue: queue,
+                weeklyPattern: weeklyText,
+                intradayPattern: intradayText,
+                aht: aht,
+                regression: regressionData,
+                timestamp: Date.now()
+            };
+            const encodedData = encodeURIComponent(JSON.stringify(forecastData));
+            window.location.href = 'erlang_calculator.html#pattern=' + encodedData;
+        }
     </script>
+
+    <footer style="text-align: center; padding: 32px 24px; color: #8a95a5; font-size: 0.85rem;">
+        Copyright © 2026 ContactSport B.V.
+    </footer>
 </body>
 </html>
