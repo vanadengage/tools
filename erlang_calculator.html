@@ -1,3 +1,7 @@
+<!--
+    Erlang C Calculator
+    Copyright © 2026 ContactSport B.V.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,6 +46,16 @@
         }
         .drop-zone input {
             display: none;
+        }
+        .drop-zone.file-selected {
+            border-style: solid;
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+        .drop-zone .filename {
+            font-weight: 600;
+            color: #2e7d32;
+            word-break: break-all;
         }
         .config-section {
             background: white;
@@ -286,11 +300,23 @@
         <img src="vanad-logo.svg" alt="Vanad Interactions" style="height: 32px;">
         <h1 style="margin: 0;">Erlang C Calculator</h1>
     </div>
-    <p>Upload a call pattern, enter volume and AHT forecasts, and calculate staffing requirements per interval.</p>
+
+    <div class="card" style="margin-bottom:20px;">
+        <p style="margin:0 0 10px;"><strong>Calculate the required staffing per interval using the Erlang C formula.</strong></p>
+        <p style="margin:0; font-size:14px; color:#555;">
+            Enter a call pattern (from the Call Pattern Analyzer or manually), set the expected volume and AHT,
+            and calculate how many agents are needed to meet your service level. The tool accounts for
+            maximum occupancy and shrinkage.
+        </p>
+    </div>
 
     <!-- Pattern Input -->
     <div class="upload-section">
         <h3>1. Call Pattern</h3>
+        <p style="font-size:13px; color:#666; margin-bottom:15px;">
+            The call pattern determines how weekly volume is distributed across days and intervals.
+            Use "Use for forecast" in the Call Pattern Analyzer to auto-fill.
+        </p>
         <div class="input-mode-toggle">
             <button class="active" onclick="setInputMode('paste', this)">Paste from clipboard</button>
             <button onclick="setInputMode('upload', this)">Upload file</button>
@@ -300,12 +326,12 @@
             <div class="paste-area-container">
                 <div class="paste-group">
                     <label>Weekly Distribution</label>
-                    <p class="hint">Paste the weekly pattern table (days as columns, percentages as values)</p>
+                    <p class="hint">Percentage of weekly volume per day (should total ~100%)</p>
                     <textarea id="weeklyPaste" rows="4" placeholder="Mon    Tue    Wed    Thu    Fri&#10;20.5%  20.1%  19.8%  20.3%  19.3%"></textarea>
                 </div>
                 <div class="paste-group">
                     <label>Intraday Distribution</label>
-                    <p class="hint">Paste the intraday pattern table (intervals as rows, days as columns, % of daily volume)</p>
+                    <p class="hint">Percentage of daily volume per interval (each column should total ~100%)</p>
                     <textarea id="intradayPaste" rows="12" placeholder="Interval  Mon    Tue    Wed    Thu    Fri&#10;08:00     2.34%  2.45%  2.38%  2.41%  2.29%&#10;08:15     3.12%  3.08%  3.15%  3.10%  3.05%&#10;..."></textarea>
                 </div>
             </div>
@@ -316,7 +342,7 @@
                 <p><strong>Drop pattern file here</strong></p>
                 <p>or click to select (CSV, TSV, or Excel)</p>
                 <p style="font-size: 12px; color: #999; margin-top: 8px;">
-                    Expected: First row = header with day names. First column = time intervals. Values = % of weekly volume.
+                    Expected: First row = header with day names. First column = intervals. Values = % of weekly volume.
                 </p>
                 <input type="file" id="fileInput" accept=".csv,.tsv,.xlsx,.xls,.txt">
             </div>
@@ -328,12 +354,14 @@
         <h3>2. Forecast Parameters</h3>
         <div class="config-grid" style="grid-template-columns: repeat(4, 1fr);">
             <div class="config-item">
-                <label>Weekly Call Volume</label>
-                <input type="text" id="weeklyVolume" placeholder="e.g. 5000" inputmode="numeric">
+                <label>Weekly Volume (calls)</label>
+                <input type="text" id="weeklyVolume" placeholder="e.g., 5000" inputmode="numeric">
+                <small style="color:#888; font-size:11px;">Expected total calls this week</small>
             </div>
             <div class="config-item">
-                <label>Average Handle Time (sec)</label>
-                <input type="text" id="aht" placeholder="e.g. 240" inputmode="numeric">
+                <label>Avg. Handling Time / AHT (sec)</label>
+                <input type="text" id="aht" placeholder="e.g., 240" inputmode="numeric">
+                <small style="color:#888; font-size:11px;">Talk time + wrap-up time in seconds</small>
             </div>
             <div class="config-item">
                 <label>Interval Length</label>
@@ -342,30 +370,53 @@
                     <option value="30">30 minutes</option>
                     <option value="60">60 minutes</option>
                 </select>
+                <small style="color:#888; font-size:11px;">Must match your pattern</small>
             </div>
             <div class="config-item">
                 <label>Service Level Target (%)</label>
                 <input type="number" id="slTarget" value="80" min="1" max="100">
+                <small style="color:#888; font-size:11px;">% calls answered within target time</small>
             </div>
             <div class="config-item">
-                <label>Target Answer Time (sec)</label>
+                <label>Target Time (sec)</label>
                 <input type="number" id="slTime" value="20" min="1">
+                <small style="color:#888; font-size:11px;">Max wait time for SL (e.g., 20 sec)</small>
             </div>
             <div class="config-item">
-                <label>Max Occupancy (%)</label>
+                <label>Max. Occupancy (%)</label>
                 <input type="number" id="maxOcc" value="85" min="1" max="100">
+                <small style="color:#888; font-size:11px;">Prevents agent overload</small>
             </div>
             <div class="config-item">
                 <label>Shrinkage (%)</label>
                 <input type="number" id="shrinkage" value="0" min="0" max="100">
+                <small style="color:#888; font-size:11px;">Breaks, leave, meetings, etc.</small>
             </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 20px;">
-            <button id="calculateBtn" onclick="calculate()">Calculate</button>
+        <div style="display: flex; align-items: center; gap: 20px; margin-top:15px;">
+            <button id="calculateBtn" onclick="calculate()">Calculate Staffing</button>
             <label style="font-size: 14px; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="fractionalAgents" style="width: auto;"> Fractional agents
+                <input type="checkbox" id="fractionalAgents" style="width: auto;"> Fractional agents (decimals)
             </label>
             <span class="status-msg" id="statusMsg"></span>
+        </div>
+    </div>
+
+    <!-- Reachability Converter (shown when regression data available) -->
+    <div class="config-section hidden" id="reachabilitySection">
+        <h3>3. Reachability → SL Target</h3>
+        <p style="font-size:13px; color:#666; margin-bottom:15px;">
+            Based on the SL-Reachability correlation from the Call Pattern Analyzer, you can convert a reachability
+            target into the required SL target. Correlation: <span id="regressionStats"></span>
+        </p>
+        <div style="display:flex; align-items:center; gap:15px; flex-wrap:wrap;">
+            <div class="config-item" style="margin:0;">
+                <label>Reachability Target (%)</label>
+                <input type="number" id="reachabilityTarget" value="95" min="80" max="100" step="0.5" style="width:100px;">
+                <small style="color:#888; font-size:11px;">100% - abandon%</small>
+            </div>
+            <button onclick="applyReachabilityTarget()" style="margin-top:20px;">Calculate SL Target</button>
+            <div id="slTargetResult" style="margin-top:20px; font-size:16px;"></div>
         </div>
     </div>
 
@@ -395,6 +446,28 @@
         return fmtNum(v, decimals !== undefined ? decimals : 1) + '%';
     }
 
+    // ── Reachability regression model (from Call Pattern Analyzer) ──
+    let regressionModel = null;
+
+    function applyReachabilityTarget() {
+        if (!regressionModel) return;
+
+        const reachTarget = parseFloat(document.getElementById('reachabilityTarget').value);
+        if (isNaN(reachTarget)) {
+            document.getElementById('slTargetResult').innerHTML = '<span style="color:#e74c3c;">Enter a valid percentage</span>';
+            return;
+        }
+
+        // Calculate: SL = (Reachability - intercept) / slope
+        let requiredSL = (reachTarget - regressionModel.intercept) / regressionModel.slope;
+        requiredSL = Math.max(0, Math.min(100, requiredSL));
+        const roundedSL = Math.round(requiredSL);
+
+        // Show result and fill in the SL target field
+        document.getElementById('slTargetResult').innerHTML = `<strong>→ SL Target: ${fmtPct(requiredSL, 1)}</strong>`;
+        document.getElementById('slTarget').value = roundedSL;
+    }
+
     // ── Input mode toggle ──
     function setInputMode(mode, btn) {
         document.querySelectorAll('.input-mode-toggle button').forEach(b => b.classList.remove('active'));
@@ -420,6 +493,18 @@
     let uploadedPattern = null;
 
     function handleFile(file) {
+        // Show filename in drop zone
+        dropZone.classList.add('file-selected');
+        dropZone.innerHTML = `
+            <p><strong>Selected file:</strong></p>
+            <p class="filename">${file.name}</p>
+            <p style="font-size: 12px; color: #666; margin-top: 8px;">Click to select a different file</p>
+            <input type="file" id="fileInput" accept=".csv,.tsv,.xlsx,.xls,.txt">
+        `;
+        document.getElementById('fileInput').addEventListener('change', e => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
         const ext = file.name.split('.').pop().toLowerCase();
         if (['xlsx', 'xls'].includes(ext)) {
             const reader = new FileReader();
@@ -510,12 +595,17 @@
         let lines = text.trim().split(/\r?\n/).filter(l => l.trim());
         if (!lines.length) return [];
 
-        let delim = '\t';
+        let delim = null;
         if (lines[0].includes('\t')) delim = '\t';
         else if (lines[0].includes(';')) delim = ';';
-        else if (lines[0].includes(',')) delim = ',';
+        else if (lines[0].includes(',') && !lines[0].match(/\d,\d/)) delim = ','; // comma but not decimal
 
-        return lines.map(l => l.split(delim).map(c => c.trim()));
+        if (delim) {
+            return lines.map(l => l.split(delim).map(c => c.trim()));
+        } else {
+            // Split by 2+ spaces (space-padded columns)
+            return lines.map(l => l.split(/\s{2,}/).map(c => c.trim()).filter(c => c));
+        }
     }
 
     function parseLocalNumber(s) {
@@ -802,7 +892,7 @@
         for (let tab of tabs) {
             tabContentsHTML += `<div id="tab-${tab.id}" class="tab-content ${tab.id === tabs[0].id ? 'active' : ''}">`;
             tabContentsHTML += `<button class="copy-btn" onclick="copyTable('table-${tab.id}')">Copy to clipboard</button>`;
-            tabContentsHTML += buildTable(tab.id, days, intervals, results, summary.fractional);
+            tabContentsHTML += buildTable(tab.id, days, intervals, results, summary.fractional, summary.intervalMin);
             tabContentsHTML += `</div>`;
         }
         document.getElementById('tabContents').innerHTML = tabContentsHTML;
@@ -810,7 +900,7 @@
         resultsDiv.scrollIntoView({ behavior: 'smooth' });
     }
 
-    function buildTable(type, days, intervals, results, fractional) {
+    function buildTable(type, days, intervals, results, fractional, intervalMin) {
         let html = '<div class="results-table" style="overflow-x:auto;"><table id="table-' + type + '">';
         html += '<thead><tr><th>Interval</th>';
         for (let day of days) html += `<th style="text-align:right;">${day}</th>`;
@@ -848,12 +938,19 @@
             html += '</tr>';
         }
 
-        // Totals row
-        html += '<tr class="day-totals-row"><td>Total</td>';
+        // Totals row - convert to hours (divide by intervals per hour)
+        const intervalsPerHour = 60 / intervalMin;
+        html += '<tr class="day-totals-row"><td>Total (hrs)</td>';
         for (let day of days) {
             let dt = dayTotals[day];
-            if (type === 'agents') html += `<td style="text-align:right;">${fractional ? fmtNum(dt.agents, 2) : fmtInt(dt.agents)}</td>`;
-            else if (type === 'agentsShrink') html += `<td style="text-align:right;">${fractional ? fmtNum(dt.agentsShrink, 2) : fmtInt(dt.agentsShrink)}</td>`;
+            if (type === 'agents') {
+                let hours = dt.agents / intervalsPerHour;
+                html += `<td style="text-align:right;">${fractional ? fmtNum(hours, 2) : fmtNum(hours, 1)}</td>`;
+            }
+            else if (type === 'agentsShrink') {
+                let hours = dt.agentsShrink / intervalsPerHour;
+                html += `<td style="text-align:right;">${fractional ? fmtNum(hours, 2) : fmtNum(hours, 1)}</td>`;
+            }
             else if (type === 'calls') html += `<td style="text-align:right;">${fmtNum(dt.calls, 1)}</td>`;
             else if (type === 'occupancy') {
                 let dayOcc = dt.agents > 0 ? dt.erlang / dt.agents : 0;
@@ -920,6 +1017,56 @@
             setTimeout(() => btn.textContent = orig, 2000);
         });
     }
+
+    // ── Load pattern data from Call Pattern Analyzer (via URL hash) ──
+    function loadFromCallPatternAnalyzer() {
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith('#pattern=')) return;
+
+        try {
+            const encodedData = hash.substring('#pattern='.length);
+            const data = JSON.parse(decodeURIComponent(encodedData));
+
+            // Populate the paste textareas
+            if (data.weeklyPattern) {
+                document.getElementById('weeklyPaste').value = data.weeklyPattern;
+            }
+            if (data.intradayPattern) {
+                document.getElementById('intradayPaste').value = data.intradayPattern;
+            }
+            if (data.aht) {
+                document.getElementById('aht').value = data.aht;
+            }
+
+            // Load regression model if available
+            if (data.regression) {
+                regressionModel = data.regression;
+                document.getElementById('regressionStats').textContent =
+                    `r=${fmtNum(data.regression.r, 2)}, R²=${fmtPct(data.regression.r2 * 100, 1)}`;
+                document.getElementById('reachabilitySection').classList.remove('hidden');
+            }
+
+            // Make sure paste mode is active
+            setInputMode('paste', document.querySelector('.input-mode-toggle button'));
+
+            // Show status message
+            let msg = `Pattern loaded: ${data.queue}`;
+            if (data.regression) msg += ` (with SL-Reachability correlation)`;
+            setStatus(msg, 'success');
+
+            // Clear the hash from URL (cleaner look)
+            history.replaceState(null, '', window.location.pathname);
+        } catch (e) {
+            console.error('Failed to load pattern data:', e);
+        }
+    }
+
+    // Initialize on page load
+    loadFromCallPatternAnalyzer();
     </script>
+
+    <footer style="text-align: center; padding: 32px 24px; color: #8a95a5; font-size: 0.85rem;">
+        Copyright © 2026 ContactSport B.V.
+    </footer>
 </body>
 </html>
